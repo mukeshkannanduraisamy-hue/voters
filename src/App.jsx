@@ -62,14 +62,31 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch all voter records from Supabase DB (1093 rows)
-      const { data: voterData, error: voterErr } = await supabase
-        .from('voters')
-        .select('*')
-        .order('serial', { ascending: true });
+      // Fetch all valid voter records from Supabase DB in chunks to bypass Supabase 1,000-row REST limit
+      let allVoters = [];
+      let fromIndex = 0;
+      const step = 1000;
+      let keepFetching = true;
 
-      if (voterErr) throw voterErr;
-      const allVoters = voterData || [];
+      while (keepFetching) {
+        const { data: chunk, error: chunkErr } = await supabase
+          .from('voters')
+          .select('*')
+          .not('part_number', 'is', null)
+          .neq('part_number', '')
+          .range(fromIndex, fromIndex + step - 1);
+
+        if (chunkErr) throw chunkErr;
+
+        if (chunk && chunk.length > 0) {
+          allVoters = allVoters.concat(chunk);
+          fromIndex += step;
+          if (chunk.length < step) keepFetching = false;
+        } else {
+          keepFetching = false;
+        }
+      }
+
       setVoters(allVoters);
 
       // Extract unique DB values for real dropdown options
