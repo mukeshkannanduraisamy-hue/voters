@@ -24,7 +24,14 @@ export default function ECIPartTable({ filteredVoters, onOpenPartVotersPage }) {
       if (g.startsWith('M')) map[pn].male++;
       else if (g.startsWith('F')) map[pn].female++;
     });
-    return Object.values(map).sort((a, b) => parseInt(a.part_number) - parseInt(b.part_number));
+    return Object.values(map).sort((a, b) => {
+      const numA = parseInt(a.part_number);
+      const numB = parseInt(b.part_number);
+      if (isNaN(numA) && isNaN(numB)) return a.part_number.localeCompare(b.part_number);
+      if (isNaN(numA)) return 1;
+      if (isNaN(numB)) return -1;
+      return numA - numB;
+    });
   }, [filteredVoters]);
 
   // Reset page to 1 when filters change

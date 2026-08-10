@@ -72,14 +72,16 @@ export default function App() {
         const { data: chunk, error: chunkErr } = await supabase
           .from('voters')
           .select('*')
-          .not('part_number', 'is', null)
-          .neq('part_number', '')
           .range(fromIndex, fromIndex + step - 1);
 
         if (chunkErr) throw chunkErr;
 
         if (chunk && chunk.length > 0) {
-          allVoters = allVoters.concat(chunk);
+          const normalized = chunk.map(v => ({
+            ...v,
+            part_number: (v.part_number && String(v.part_number).trim()) ? String(v.part_number).trim() : 'General'
+          }));
+          allVoters = allVoters.concat(normalized);
           fromIndex += step;
           if (chunk.length < step) keepFetching = false;
         } else {
