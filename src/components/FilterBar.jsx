@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Search, SlidersHorizontal } from 'lucide-react';
+import { RotateCcw, Search, SlidersHorizontal, UserX } from 'lucide-react';
 
 export default function FilterBar({
   statesList,
@@ -23,6 +23,8 @@ export default function FilterBar({
   relationTypesList,
   selectedRelationType,
   setSelectedRelationType,
+  selectedStatus,
+  setSelectedStatus,
   searchQuery,
   setSearchQuery,
   onResetFilters
@@ -33,6 +35,7 @@ export default function FilterBar({
     selectedSection !== 'ALL' ||
     selectedGender !== 'ALL' ||
     selectedRelationType !== 'ALL' ||
+    selectedStatus !== 'ALL' ||
     searchQuery.trim() !== '';
 
   return (
@@ -43,7 +46,7 @@ export default function FilterBar({
           <SlidersHorizontal size={18} className="icon-violet" />
           <div>
             <h3 className="section-title">Electoral Filters</h3>
-            <p className="section-subtitle">Filter voters by constituency, part, section, gender & more</p>
+            <p className="section-subtitle">Filter voters by constituency, part, section, status & deleted records</p>
           </div>
         </div>
         {hasActiveFilters && (
@@ -98,6 +101,23 @@ export default function FilterBar({
           <select id="filter-section" className="eci-select" value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)}>
             <option value="ALL">All Sections</option>
             {sectionsList.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        <div className="eci-field-group">
+          <label htmlFor="filter-status" style={{ color: selectedStatus === 'DELETED' ? '#ef4444' : 'inherit' }}>
+            <UserX size={13} style={{ display: 'inline', marginRight: '3px' }} /> Record Status / Deletion
+          </label>
+          <select 
+            id="filter-status" 
+            className="eci-select" 
+            style={{ borderColor: selectedStatus === 'DELETED' ? '#ef4444' : 'var(--border-color)' }}
+            value={selectedStatus} 
+            onChange={(e) => setSelectedStatus(e.target.value)}
+          >
+            <option value="ALL">All Electors (Active + Deleted)</option>
+            <option value="ACTIVE">Active Electors Only</option>
+            <option value="DELETED">⚠️ Deleted Electors Only (Shifted / Expired)</option>
           </select>
         </div>
 

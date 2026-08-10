@@ -33,10 +33,16 @@ export default function PrintableSlip({ voter, photoUrl, station, onClose, isEmb
   const slipContent = (
     <div className="official-slip-card" id="official-voter-slip">
       {/* Top Security Accent Ribbon */}
-      <div className="slip-security-ribbon">
-        <span><ShieldCheck size={13} /> OFFICIAL ECI VOTER INFORMATION SLIP</span>
-        <span style={{ fontSize: '0.68rem', opacity: 0.9 }}>CONST. 58 - பென்னாகரம்</span>
-      </div>
+      {voter.is_deleted ? (
+        <div className="slip-deleted-ribbon">
+          <span>⚠️ DELETED VOTER: {voter.deletion_reason || 'Shifted / Relocated / Expired'}</span>
+        </div>
+      ) : (
+        <div className="slip-security-ribbon">
+          <span><ShieldCheck size={13} /> OFFICIAL ECI VOTER INFORMATION SLIP</span>
+          <span style={{ fontSize: '0.68rem', opacity: 0.9 }}>CONST. 58 - பென்னாகரம்</span>
+        </div>
+      )}
 
       {/* Header */}
       <div className="official-slip-header">

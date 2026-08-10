@@ -41,6 +41,7 @@ export default function App() {
   const [selectedSection, setSelectedSection] = useState('ALL');
   const [selectedGender, setSelectedGender] = useState('ALL');
   const [selectedRelationType, setSelectedRelationType] = useState('ALL');
+  const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   // 3-Page Navigation View State: 'PARTS_PAGE' | 'VOTERS_PAGE' | 'PROFILE_PAGE'
@@ -181,6 +182,14 @@ export default function App() {
         return false;
       }
 
+      // Status / Deletion Filter
+      if (selectedStatus === 'ACTIVE' && v.is_deleted) {
+        return false;
+      }
+      if (selectedStatus === 'DELETED' && !v.is_deleted) {
+        return false;
+      }
+
       // Global Search Filter (Name in Tamil/English, EPIC ID, House No, Serial No)
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase().trim();
@@ -231,6 +240,7 @@ export default function App() {
     setSelectedSection('ALL');
     setSelectedGender('ALL');
     setSelectedRelationType('ALL');
+    setSelectedStatus('ALL');
     setSearchQuery('');
     setViewState('PARTS_PAGE');
     setActivePartNumber(null);
@@ -289,6 +299,8 @@ export default function App() {
               relationTypesList={relationTypesList}
               selectedRelationType={selectedRelationType}
               setSelectedRelationType={setSelectedRelationType}
+              selectedStatus={selectedStatus}
+              setSelectedStatus={setSelectedStatus}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               onResetFilters={resetFilters}

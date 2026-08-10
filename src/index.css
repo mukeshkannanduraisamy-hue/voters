@@ -830,6 +830,110 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.75rem;
   font-weight: 700;
 }
+.status-deleted {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+/* Deleted Voter Row Highlight */
+.eci-voters-table tbody tr.row-deleted {
+  background-color: rgba(239, 68, 68, 0.05);
+  border-left: 4px solid #ef4444;
+}
+.eci-voters-table tbody tr.row-deleted:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+}
+
+.name-deleted-text {
+  color: #ef4444 !important;
+  font-weight: 700;
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.5);
+}
+
+.deleted-tag-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  margin-left: 0.4rem;
+}
+
+.btn-deleted-profile {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+.btn-deleted-profile:hover {
+  background: #ef4444 !important;
+  color: white !important;
+}
+
+/* Deletion Warning Banner in Profile */
+.vp-deleted-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-xl);
+  margin-bottom: 1.25rem;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.1);
+  animation: fadeIn 0.3s ease-out;
+}
+.alert-icon-box {
+  width: 44px;
+  height: 44px;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ef4444;
+}
+.vp-deleted-alert-banner h4 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-bottom: 0.15rem;
+  color: #dc2626;
+}
+.vp-deleted-alert-banner p {
+  font-size: 0.84rem;
+  color: var(--text-main);
+  margin: 0;
+}
+
+/* Slip Deleted Ribbon */
+.slip-deleted-ribbon {
+  background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%);
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
 /* 36. Official Slip styles (Medium Size Card with Interactive FX) */
 .official-slip-card {

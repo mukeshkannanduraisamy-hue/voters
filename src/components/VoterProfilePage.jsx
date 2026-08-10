@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Printer, MapPin, ShieldCheck, Copy, Check, Edit3, Home,
-  FileText, ChevronRight, Eye, Star, StarOff, Clock, Activity, Bookmark, BookmarkCheck, Maximize2, Minimize2 } from 'lucide-react';
+  FileText, ChevronRight, Eye, Star, StarOff, Clock, Activity, Bookmark, BookmarkCheck, Maximize2, Minimize2, UserX, AlertTriangle } from 'lucide-react';
 import PrintableSlip from './PrintableSlip';
 
 export default function VoterProfilePage({ voter, photoUrl, onBackToVoterList, onUpdateVoter }) {
@@ -61,6 +61,19 @@ export default function VoterProfilePage({ voter, photoUrl, onBackToVoterList, o
         <ChevronRight size={14} className="vp-breadcrumb-sep" />
         <span className="vp-breadcrumb-current">{voter.name}</span>
       </div>
+
+      {/* DELETION ALERT BANNER */}
+      {voter.is_deleted && (
+        <div className="vp-deleted-alert-banner">
+          <div className="alert-icon-box">
+            <UserX size={24} />
+          </div>
+          <div className="alert-content">
+            <h4>⚠️ DELETED VOTER RECORD</h4>
+            <p>Reason: <strong>{voter.deletion_reason || 'Shifted / Relocated / Expired'}</strong></p>
+          </div>
+        </div>
+      )}
 
       {/* Top Action Bar */}
       <div className="vp-action-bar">

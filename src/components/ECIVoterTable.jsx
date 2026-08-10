@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Search, ChevronRight, CheckCircle2, Users } from 'lucide-react';
+import { ArrowLeft, Search, ChevronRight, CheckCircle2, Users, UserX, AlertTriangle } from 'lucide-react';
 import { ECIPdfHeader, ECIPdfBottomSummary } from './ECIPdfHeaderSummary';
 
 export default function ECIVoterTable({
@@ -108,6 +108,7 @@ export default function ECIVoterTable({
               paginated.map((voter, idx) => (
                 <tr
                   key={voter.id}
+                  className={voter.is_deleted ? 'row-deleted' : ''}
                   onClick={() => onOpenVoterProfilePage(voter)}
                   style={{ animationDelay: `${idx * 15}ms` }}
                 >
@@ -115,7 +116,16 @@ export default function ECIVoterTable({
                   <td>
                     <span className="epic-badge">{voter.epic || 'N/A'}</span>
                   </td>
-                  <td className="cell-name">{voter.name}</td>
+                  <td className="cell-name">
+                    <span className={voter.is_deleted ? 'name-deleted-text' : ''}>
+                      {voter.name}
+                    </span>
+                    {voter.is_deleted && (
+                      <span className="deleted-tag-inline" title={voter.deletion_reason || 'Deleted Voter'}>
+                        <UserX size={10} /> {voter.deletion_reason ? voter.deletion_reason.split(',')[0] : 'Deleted'}
+                      </span>
+                    )}
+                  </td>
                   <td className="cell-muted">
                     <span className="relation-type">{voter.relation_type}</span> {voter.relation_name || '—'}
                   </td>
@@ -124,7 +134,11 @@ export default function ECIVoterTable({
                     <span className="age-gender">{voter.age || '--'} / {voter.gender || '--'}</span>
                   </td>
                   <td>
-                    {voter.verified ? (
+                    {voter.is_deleted ? (
+                      <span className="status-deleted" title={voter.deletion_reason || 'Deleted Voter'}>
+                        <UserX size={12} /> {voter.deletion_reason ? (voter.deletion_reason.includes('Shifted') ? 'Shifted' : voter.deletion_reason.includes('Expired') ? 'Expired' : 'Deleted') : 'Deleted'}
+                      </span>
+                    ) : voter.verified ? (
                       <span className="status-verified"><CheckCircle2 size={13} /> Verified</span>
                     ) : (
                       <span className="status-pending">Pending</span>
@@ -132,7 +146,7 @@ export default function ECIVoterTable({
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <button
-                      className="btn-eci-blue btn-sm"
+                      className={voter.is_deleted ? 'btn-eci-ghost btn-sm btn-deleted-profile' : 'btn-eci-blue btn-sm'}
                       onClick={(e) => { e.stopPropagation(); onOpenVoterProfilePage(voter); }}
                     >
                       Profile <ChevronRight size={13} />
