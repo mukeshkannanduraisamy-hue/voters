@@ -425,32 +425,45 @@ h1, h2, h3, h4, h5, h6 {
 .part-table-wrapper {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-lg);
   margin-top: 1.5rem;
+  transition: all var(--transition-normal);
 }
 
 /* 23. part-table-header */
 .part-table-header {
-  background: linear-gradient(to right, #312e81, var(--primary), var(--cyan-accent));
-  color: white;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
   font-weight: 700;
-  padding: 1rem 1.5rem;
-  display: flex;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 1.1rem 1.75rem;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   align-items: center;
-  justify-content: space-between;
+  border-bottom: 2px solid rgba(124, 58, 237, 0.4);
+}
+
+.part-rows-list {
+  display: flex;
+  flex-direction: column;
 }
 
 /* 24. part-row */
 .part-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: 1.1rem 1.75rem;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
-  transition: background-color var(--transition-normal);
+  transition: all var(--transition-bounce);
+  position: relative;
+  background: transparent;
 }
 .part-row:last-child {
   border-bottom: none;
@@ -458,47 +471,117 @@ h1, h2, h3, h4, h5, h6 {
 
 /* 25. part-row:hover */
 .part-row:hover {
-  background-color: rgba(124, 58, 237, 0.08);
+  background: rgba(124, 58, 237, 0.06);
+  padding-left: 2rem;
+}
+.part-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.part-row:hover::before {
+  opacity: 1;
 }
 
-/* 26. part-row-left */
-.part-row-left {
+/* 26. part-row-cell */
+.part-row-cell {
   display: flex;
   align-items: center;
-  gap: 1rem;
 }
-
-/* 27. part-row-right */
-.part-row-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.part-row-main {
+  gap: 1.1rem;
 }
 
 /* 28. part-title-text */
 .part-title-text {
-  font-weight: 600;
-  font-size: 1rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+.part-sub-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
 }
 
 /* 29. part-voters-badge */
 .part-voters-badge {
-  background-color: rgba(6, 182, 212, 0.15);
-  color: #22d3ee;
+  background: rgba(6, 182, 212, 0.12);
+  color: var(--cyan-accent);
   border: 1px solid rgba(6, 182, 212, 0.3);
-  padding: 0.25rem 0.75rem;
+  padding: 0.35rem 0.9rem;
   border-radius: var(--radius-full);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+}
+
+.part-number-badge {
+  background: linear-gradient(135deg, var(--primary), #6d28d9);
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+}
+.part-number-badge-lg {
+  font-size: 1.25rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radius-lg);
+}
+
+.gender-male {
+  color: #3b82f6;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.gender-female {
+  color: #ec4899;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.gender-divider {
+  color: var(--text-muted);
+  margin: 0 0.35rem;
+  opacity: 0.5;
 }
 
 /* 30. eci-voters-table-wrapper */
 .eci-voters-table-wrapper {
   overflow-x: auto;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
-  margin-top: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  margin-top: 1.25rem;
+  transition: all var(--transition-normal);
+}
+
+.eci-table-title-bar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  color: #ffffff;
+  padding: 0.85rem 1.5rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--primary);
 }
 
 /* 31. eci-voters-table */
@@ -510,32 +593,116 @@ h1, h2, h3, h4, h5, h6 {
 
 /* 32. eci-voters-table th */
 .eci-voters-table th {
-  background-color: #1e1b4b; /* deep indigo */
-  color: white;
+  background-color: var(--bg-secondary);
+  color: var(--text-muted);
   text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  padding: 1rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 /* 33. eci-voters-table td */
 .eci-voters-table td {
-  padding: 1rem;
+  padding: 0.9rem 1.25rem;
   border-bottom: 1px solid var(--border-color);
-  font-size: 0.875rem;
+  font-size: 0.88rem;
+  color: var(--text-main);
+  vertical-align: middle;
 }
 
-/* 34. eci-voters-table tbody tr, 35. eci-voters-table tbody tr:nth-child(even) */
+/* 34. eci-voters-table tbody tr */
 .eci-voters-table tbody tr {
-  transition: background-color var(--transition-normal);
+  transition: all var(--transition-fast);
   cursor: pointer;
+  position: relative;
 }
 .eci-voters-table tbody tr:nth-child(even) {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(255, 255, 255, 0.015);
 }
 .eci-voters-table tbody tr:hover {
-  background-color: rgba(124, 58, 237, 0.1);
+  background-color: rgba(124, 58, 237, 0.07);
+}
+.eci-voters-table tbody tr:hover td {
+  color: var(--text-main);
+}
+
+.cell-serial {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  color: var(--primary) !important;
+  font-size: 0.95rem !important;
+}
+
+.cell-name {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--text-main);
+}
+
+.cell-muted {
+  color: var(--text-muted) !important;
+  font-size: 0.85rem;
+}
+
+.relation-type {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  margin-right: 0.35rem;
+  border: 1px solid var(--border-color);
+}
+
+.epic-badge {
+  font-family: 'Outfit', monospace;
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  color: var(--cyan-accent);
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-md);
+  display: inline-block;
+}
+.epic-badge-lg {
+  font-size: 1.05rem;
+  padding: 0.4rem 0.9rem;
+}
+
+.age-gender {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.status-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.status-pending {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 /* 36. Official Slip styles (Medium Size Card) */
