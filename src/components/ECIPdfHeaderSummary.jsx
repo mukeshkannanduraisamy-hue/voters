@@ -113,7 +113,6 @@ export function ECIPdfHeader({ partNumber, voters }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                     <tbody>
                       <tr><td style={{ fontWeight: 'bold', width: '45%' }}>முக்கிய நகரம்/கிராமம்</td><td>: {sectionLocationName}</td></tr>
-                      <tr><td style={{ fontWeight: 'bold' }}>வார்டு</td><td>: 5</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>அஞ்சல் அலுவலகம்</td><td>: {sectionLocationName}</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>காவல் நிலையம்</td><td>: பாப்பாரப்பட்டி</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>பஞ்சாயத்து / வட்டம்</td><td>: பென்னாகரம்</td></tr>
