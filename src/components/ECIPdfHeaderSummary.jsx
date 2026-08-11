@@ -23,6 +23,14 @@ export function ECIPdfHeader({ partNumber, voters }) {
   const primarySection = sections[0] || 'பன்குளம் (வ.கி) மற்றும் (ஊ)';
   const sectionLocationName = primarySection.split(',')[0] || primarySection;
 
+  let wardValue = '';
+  if (primarySection.includes('வார்டு')) {
+    const parts = primarySection.split('வார்டு');
+    if (parts.length > 1) {
+      wardValue = parts[1].trim();
+    }
+  }
+
   const constituencyText = first.constituency ? first.constituency : '58-பென்னாகரம் (பொது)';
 
   return (
@@ -113,6 +121,7 @@ export function ECIPdfHeader({ partNumber, voters }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                     <tbody>
                       <tr><td style={{ fontWeight: 'bold', width: '45%' }}>முக்கிய நகரம்/கிராமம்</td><td>: {sectionLocationName}</td></tr>
+                      <tr><td style={{ fontWeight: 'bold' }}>வார்டு</td><td>: {wardValue || ''}</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>அஞ்சல் அலுவலகம்</td><td>: {sectionLocationName}</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>காவல் நிலையம்</td><td>: பாப்பாரப்பட்டி</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>பஞ்சாயத்து / வட்டம்</td><td>: பென்னாகரம்</td></tr>
