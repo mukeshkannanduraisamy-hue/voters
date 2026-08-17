@@ -5,6 +5,8 @@ import { ECIPdfHeader, ECIPdfBottomSummary } from './ECIPdfHeaderSummary';
 export default function ECIVoterTable({
   partNumber,
   voters,
+  partDetails,
+  electorCounts,
   photosMap: _photosMap,
   onBackToParts,
   onOpenVoterProfilePage
@@ -29,8 +31,10 @@ export default function ECIVoterTable({
   const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
   const first = voters[0] || {};
 
-  const maleCount = voters.filter(v => (v.gender || '').toUpperCase().startsWith('M')).length;
-  const femaleCount = voters.filter(v => (v.gender || '').toUpperCase().startsWith('F')).length;
+  // Find the elector count for this specific part
+  const partCountData = electorCounts.find(ec => String(ec['பாகம்_எண்']) === String(partNumber));
+  const maleCount = partCountData ? partCountData['ஆண்'] : voters.filter(v => (v.gender || '').toUpperCase().startsWith('M')).length;
+  const femaleCount = partCountData ? partCountData['பெண்'] : voters.filter(v => (v.gender || '').toUpperCase().startsWith('F')).length;
 
   return (
     <div className="voter-page-container" id="theravens-voter-page">
@@ -61,11 +65,10 @@ export default function ECIVoterTable({
             </p>
           </div>
         </div>
-        <div className="banner-stats">
+        <div className="banner-right">
           <div className="banner-stat">
-            <Users size={15} className="icon-cyan" />
-            <span className="banner-stat-value">{filtered.length}</span>
-            <span className="banner-stat-label">Electors</span>
+            <span className="stat-label">Total Voters</span>
+            <span className="stat-value">{filtered.length}</span>
           </div>
           <div className="banner-stat">
             <span className="gender-male">{maleCount} M</span>
@@ -76,7 +79,12 @@ export default function ECIVoterTable({
       </div>
 
       {/* ====== 1. TOP PDF COVER & REVISION DETAILS BOX (Matching Image 1) ====== */}
-      <ECIPdfHeader partNumber={partNumber} voters={voters} />
+      <ECIPdfHeader 
+        partNumber={partNumber} 
+        voters={voters} 
+        partDetails={partDetails} 
+        electorCounts={electorCounts} 
+      />
 
       {/* ====== 2. ELECTORAL ROLL VOTER DIRECTORY TABLE ====== */}
       <div className="eci-voters-table-wrapper" style={{ marginTop: '1.25rem' }}>

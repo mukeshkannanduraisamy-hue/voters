@@ -1,37 +1,42 @@
 import React, { useState } from 'react';
 import { FileText, ChevronDown, ChevronUp, Printer, CheckCircle } from 'lucide-react';
 
-export function ECIPdfHeader({ partNumber, voters }) {
+export function ECIPdfHeader({ partNumber, voters, partDetails = [], electorCounts = [] }) {
   const [collapsed, setCollapsed] = useState(false);
   const first = voters[0] || {};
   const totalCount = voters.length;
   
-  // Real DB calculated statistics
-  const maleCount = voters.filter(v => (v.gender || '').toUpperCase().startsWith('M')).length;
-  const femaleCount = voters.filter(v => (v.gender || '').toUpperCase().startsWith('F')).length;
-  const tgCount = voters.filter(v => (v.gender || '').toUpperCase().includes('THIRD') || (v.gender || '').toUpperCase().includes('TRANS')).length;
+  const partDetail = partDetails.find(pd => String(pd['பாகம்_எண்']) === String(partNumber)) || {};
+  const ecCount = electorCounts.find(ec => String(ec['பாகம்_எண்']) === String(partNumber)) || {};
 
-  const minSerial = voters.length > 0 
+  // Real DB calculated statistics
+  const maleCount = ecCount['ஆண்'] ?? voters.filter(v => (v.gender || '').toUpperCase().startsWith('M')).length;
+  const femaleCount = ecCount['பெண்'] ?? voters.filter(v => (v.gender || '').toUpperCase().startsWith('F')).length;
+  const tgCount = ecCount['மூன்றாம்_பாலினம்'] ?? voters.filter(v => (v.gender || '').toUpperCase().includes('THIRD') || (v.gender || '').toUpperCase().includes('TRANS')).length;
+
+  const minSerial = ecCount['தொடங்கும்_வரிசை_எண்'] ?? (voters.length > 0 
     ? Math.min(...voters.map(v => v.serial || 1)) 
-    : 1;
-  const maxSerial = voters.length > 0 
+    : 1);
+  const maxSerial = ecCount['முடியும்_வரிசை_எண்'] ?? (voters.length > 0 
     ? Math.max(...voters.map(v => v.serial || totalCount)) 
-    : totalCount;
+    : totalCount);
 
   // Real DB Section list
-  const sections = Array.from(new Set(voters.map(v => v.section_name).filter(Boolean)));
+  const sections = partDetail['பிரிவு_விவரம்'] ? partDetail['பிரிவு_விவரம்'].split('\n') : Array.from(new Set(voters.map(v => v.section_name).filter(Boolean)));
   const primarySection = sections[0] || 'பன்குளம் (வ.கி) மற்றும் (ஊ)';
-  const sectionLocationName = primarySection.split(',')[0] || primarySection;
+  const sectionLocationName = partDetail['முக்கிய_நகரம்_கிராமம்'] || primarySection.split(',')[0] || primarySection;
 
-  let wardValue = '';
-  if (primarySection.includes('வார்டு')) {
+  let wardValue = partDetail['வார்டு'] || '';
+  if (!wardValue && primarySection.includes('வார்டு')) {
     const parts = primarySection.split('வார்டு');
     if (parts.length > 1) {
       wardValue = parts[1].trim();
     }
   }
 
-  const constituencyText = first.constituency ? first.constituency : '58-பென்னாகரம் (பொது)';
+  const constituencyText = partDetail['சட்டமன்ற_தொகுதி_எண்'] 
+    ? `${partDetail['சட்டமன்ற_தொகுதி_எண்']}-${partDetail['சட்டமன்ற_தொகுதி_பெயர்']} (${partDetail['சட்டமன்ற_ஒதுக்கீடு'] || 'பொது'})` 
+    : (first.constituency ? first.constituency : '58-பென்னாகரம் (பொது)');
 
   return (
     <div className="eci-pdf-box eci-pdf-header-box" id="eci-pdf-cover-page">
@@ -120,13 +125,13 @@ export function ECIPdfHeader({ partNumber, voters }) {
                 <td style={{ width: '50%', verticalAlign: 'top' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                     <tbody>
-                      <tr><td style={{ fontWeight: 'bold', width: '45%' }}>முக்கிய நகரம்/கிராமம்</td><td>: {sectionLocationName}</td></tr>
-                      <tr><td style={{ fontWeight: 'bold' }}>வார்டு</td><td>: {wardValue || ''}</td></tr>
-                      <tr><td style={{ fontWeight: 'bold' }}>அஞ்சல் அலுவலகம்</td><td>: {sectionLocationName}</td></tr>
+                      <tr><td style={{ fontWeight: 'bold', width: '45%' }}>முக்கிய நகரம்/கிராமம்</td><td>: {partDetail['முக்கிய_நகரம்_கிராமம்'] || sectionLocationName}</td></tr>
+                      <tr><td style={{ fontWeight: 'bold' }}>வார்டு</td><td>: {partDetail['வார்டு'] || wardValue || ''}</td></tr>
+                      <tr><td style={{ fontWeight: 'bold' }}>அஞ்சல் அலுவலகம்</td><td>: {partDetail['முக்கிய_நகரம்_கிராமம்'] || sectionLocationName}</td></tr>
                       <tr><td style={{ fontWeight: 'bold' }}>காவல் நிலையம்</td><td>: பாப்பாரப்பட்டி</td></tr>
-                      <tr><td style={{ fontWeight: 'bold' }}>பஞ்சாயத்து / வட்டம்</td><td>: பென்னாகரம்</td></tr>
-                      <tr><td style={{ fontWeight: 'bold' }}>கோட்டம் / மாவட்டம்</td><td>: தர்மபுரி</td></tr>
-                      <tr><td style={{ fontWeight: 'bold' }}>அஞ்சல் குறியீட்டு எண்</td><td>: 636809</td></tr>
+                      <tr><td style={{ fontWeight: 'bold' }}>பஞ்சாயத்து / வட்டம்</td><td>: {partDetail['பஞ்சாயத்து'] ? `${partDetail['பஞ்சாயத்து']} / ` : ''}{partDetail['வட்டம்'] || 'பென்னாகரம்'}</td></tr>
+                      <tr><td style={{ fontWeight: 'bold' }}>கோட்டம் / மாவட்டம்</td><td>: {partDetail['மாவட்டம்'] || 'தர்மபுரி'}</td></tr>
+                      <tr><td style={{ fontWeight: 'bold' }}>அஞ்சல் குறியீட்டு எண்</td><td>: {partDetail['அஞ்சல்_குறியீட்டு_எண்'] || '636809'}</td></tr>
                     </tbody>
                   </table>
                 </td>

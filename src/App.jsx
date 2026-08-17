@@ -22,6 +22,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [voters, setVoters] = useState([]);
+  const [partDetails, setPartDetails] = useState([]);
+  const [electorCounts, setElectorCounts] = useState([]);
   const [photosMap, setPhotosMap] = useState({});
 
   // Dynamic Dropdown Lists Extracted from DB
@@ -63,7 +65,21 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch all valid voter records from Supabase DB in chunks to bypass Supabase 1,000-row REST limit
+      // Fetch Part Details from view
+      const { data: partDetailsData, error: pdErr } = await supabase
+        .from('view_part_details')
+        .select('*');
+      if (pdErr) throw pdErr;
+      setPartDetails(partDetailsData || []);
+
+      // Fetch Elector Counts from view
+      const { data: electorCountsData, error: ecErr } = await supabase
+        .from('view_elector_counts')
+        .select('*');
+      if (ecErr) throw ecErr;
+      setElectorCounts(electorCountsData || []);
+
+      // Fetch all valid voter records from Supabase view in chunks to bypass Supabase 1,000-row REST limit
       let allVoters = [];
       let fromIndex = 0;
       const step = 1000;
@@ -71,7 +87,7 @@ export default function App() {
 
       while (keepFetching) {
         const { data: chunk, error: chunkErr } = await supabase
-          .from('voters')
+          .from('view_voters_list')
           .select('*')
           .range(fromIndex, fromIndex + step - 1);
 
@@ -79,8 +95,22 @@ export default function App() {
 
         if (chunk && chunk.length > 0) {
           const normalized = chunk.map(v => ({
-            ...v,
-            part_number: String(v.part_number).trim()
+            // Map Tamil keys to expected English keys used by frontend
+            id: v.voter_id,
+            serial: v['வாக்காளர்_sno'],
+            epic: v.epic_id,
+            name: v['பெயர்'],
+            relation_type: v['உறவு_முறை'],
+            relation_name: v['தந்தை_கணவர்_பெயர்'],
+            house_number: v['வீட்டு_எண்'],
+            age: v['வயது'],
+            gender: v['பாலினம்'],
+            section_name: v['பிரிவு_தலைப்பு'],
+            part_number: String(v['பாகம்_எண்'] || '').trim(),
+            is_deleted: v.is_deleted,
+            deletion_reason: v.deletion_reason,
+            // Fallback for constituency (since it's not directly in this view, we can extract or use default)
+            constituency: '58 - பென்னாகரம்'
           }));
           allVoters = allVoters.concat(normalized);
           fromIndex += step;
@@ -308,6 +338,8 @@ export default function App() {
 
             <ECIPartTable
               filteredVoters={filteredVoters}
+              partDetails={partDetails}
+              electorCounts={electorCounts}
               onOpenPartVotersPage={handleOpenPartPage}
             />
           </>
@@ -316,6 +348,8 @@ export default function App() {
           <ECIVoterTable
             partNumber={activePartNumber}
             voters={partPageVoters}
+            partDetails={partDetails}
+            electorCounts={electorCounts}
             photosMap={photosMap}
             onBackToParts={handleBackToParts}
             onOpenVoterProfilePage={handleOpenVoterProfilePage}
