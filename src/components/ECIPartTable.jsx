@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronRight, ChevronLeft, Layers } from 'lucide-react';
 
-export default function ECIPartTable({ filteredVoters, onOpenPartVotersPage }) {
+export default function ECIPartTable({ filteredVoters, partDetails = [], electorCounts = [], onOpenPartVotersPage }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -10,10 +10,18 @@ export default function ECIPartTable({ filteredVoters, onOpenPartVotersPage }) {
     filteredVoters.forEach((v) => {
       const pn = v.part_number ? String(v.part_number) : '0';
       if (!map[pn]) {
+        const pd = partDetails.find(p => String(p['பாகம்_எண்']) === pn);
+        const constText = pd && pd['சட்டமன்ற_தொகுதி_எண்'] 
+          ? `${pd['சட்டமன்ற_தொகுதி_எண்']} - ${pd['சட்டமன்ற_தொகுதி_பெயர்'] || ''}`
+          : (v.constituency || '--');
+        const locText = pd && (pd['முக்கிய_நகரம்_கிராமம்'] || pd['பிரிவு_விவரம்'])
+          ? (pd['முக்கிய_நகரம்_கிராமம்'] || pd['பிரிவு_விவரம்'].split('\n')[0])
+          : (v.section_name || '--');
+
         map[pn] = {
           part_number: pn,
-          constituency: v.constituency || '--',
-          section_name: v.section_name || '--',
+          constituency: constText,
+          section_name: locText,
           voters: [],
           male: 0,
           female: 0,
