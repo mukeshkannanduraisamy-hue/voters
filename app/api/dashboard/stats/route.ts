@@ -5,6 +5,13 @@ import { buildScopeFilter } from '@/lib/auth/scope-guard'
 
 import { getConstituencies } from '@/lib/db/constituencies'
 
+export const dynamic = 'force-dynamic'
+
+// 60-second TTL cache for dashboard stats
+const statsCache = new Map<string, { data: any; ts: number }>()
+const CACHE_TTL = 60_000
+
+
 export async function GET(request: Request) {
   const cookieHeader = request.headers.get('cookie')
   const token = getTokenFromCookieHeader(cookieHeader)
@@ -17,6 +24,12 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const acNoParam = searchParams.get('ac_no')
   const acNo = acNoParam ? parseInt(acNoParam, 10) : null
+
+  const cacheKey = `${payload.sub}_${payload.role}_${acNo ?? 'all'}`
+  const cached = statsCache.get(cacheKey)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return NextResponse.json(cached.data)
+  }
 
   const db = getDb()
   const constituencies = getConstituencies()
@@ -109,7 +122,7 @@ export async function GET(request: Request) {
   const completionPct = totalVoters > 0 ? Math.round((completedSurveys / totalVoters) * 100) : 0
   const todayDeltaPct = yesterdayCount > 0 ? Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100) : 0
 
-  return NextResponse.json({
+  const result = {
     total_voters: totalVoters,
     completed_surveys: completedSurveys,
     pending_surveys: totalVoters - completedSurveys,
@@ -119,5 +132,8 @@ export async function GET(request: Request) {
     completion_pct: completionPct,
     breakdown,
     constituencies,
-  })
+  }
+  statsCache.set(cacheKey, { data: result, ts: Date.now() })
+  return NextResponse.json(result)
 }
+

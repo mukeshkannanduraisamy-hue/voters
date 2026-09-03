@@ -67,6 +67,15 @@ export default function AppHeader({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Close menu on Escape key
+  useEffect(() => {
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [])
+
   // Close menu on route change
   useEffect(() => {
     setMenuOpen(false)
@@ -103,7 +112,7 @@ export default function AppHeader({
       : 'bg-emerald-50 text-emerald-700 border-emerald-200'
 
   return (
-    <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-2.5 transition-all">
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-2.5 transition-all">
       <div className="flex items-center justify-between gap-3">
         {/* Left Side: Mobile Menu Toggle & Title */}
         <div className="flex items-center gap-3">

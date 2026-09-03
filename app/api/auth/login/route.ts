@@ -6,6 +6,8 @@ import { signToken, buildSetCookieHeader } from '@/lib/auth/jwt'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 function sha256(str: string): string {
   return crypto.createHash('sha256').update(str).digest('hex')
 }
@@ -62,6 +64,7 @@ export async function POST(request: Request) {
       path: '/',
       sameSite: 'lax',
       maxAge: 86400,
+      secure: process.env.NODE_ENV === 'production',
     })
 
     return response

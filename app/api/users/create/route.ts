@@ -5,6 +5,8 @@ import { createUserSchema } from '@/lib/validations'
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   const cookieHeader = request.headers.get('cookie')
   const token = getTokenFromCookieHeader(cookieHeader)

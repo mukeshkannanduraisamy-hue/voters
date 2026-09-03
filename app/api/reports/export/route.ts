@@ -4,6 +4,8 @@ import { getDb } from '@/lib/db'
 import { buildScopeFilter } from '@/lib/auth/scope-guard'
 import * as XLSX from 'xlsx'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   const cookieHeader = request.headers.get('cookie')
   const token = getTokenFromCookieHeader(cookieHeader)

@@ -134,6 +134,17 @@ function VoterDirectoryContent() {
     }
   }, [searchParams])
 
+  // Close modal on Escape key press
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setSelectedVoter(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Fetch voters on filter / pagination change
   async function fetchVoters() {
     setLoading(true)
@@ -529,7 +540,9 @@ function VoterDirectoryContent() {
 
                       <td className="px-4 py-3">
                         <div className="font-bold text-slate-900 text-sm">
-                          {voter.name_ta}
+                          <span title={voter.name_ta} className="block truncate max-w-[180px]">
+                            {voter.name_ta}
+                          </span>
                         </div>
                         {voter.corrected_name_ta && (
                           <div className="text-[10px] text-emerald-600 font-medium">
@@ -589,6 +602,9 @@ function VoterDirectoryContent() {
                                     src={voter.symbol_img || '/parties/independent.svg'}
                                     alt={voter.party_name}
                                     className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      ;(e.target as HTMLImageElement).src = '/parties/independent.svg'
+                                    }}
                                   />
                                 </div>
                                 <span>{voter.party_name}</span>
@@ -675,8 +691,14 @@ function VoterDirectoryContent() {
 
       {/* Voter Inspection Modal / Drawer */}
       {selectedVoter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-6">
+        <div
+          onClick={() => setSelectedVoter(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-6"
+          >
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div>
@@ -773,6 +795,9 @@ function VoterDirectoryContent() {
                           src={selectedVoter.symbol_img || '/parties/independent.svg'}
                           alt={selectedVoter.party_name || 'Party'}
                           className="w-full h-full object-contain"
+                          onError={(e) => {
+                            ;(e.target as HTMLImageElement).src = '/parties/independent.svg'
+                          }}
                         />
                       </div>
                       <span>{selectedVoter.party_name || '—'}</span>

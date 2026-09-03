@@ -3,6 +3,8 @@ import { verifyToken, getTokenFromCookieHeader } from '@/lib/auth/jwt'
 import { getDb } from '@/lib/db'
 import type { User } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   const cookieHeader = request.headers.get('cookie')
   const token = getTokenFromCookieHeader(cookieHeader)

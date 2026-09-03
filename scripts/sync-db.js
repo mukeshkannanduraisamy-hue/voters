@@ -72,6 +72,30 @@ async function main() {
   db.close();
 
   console.log(`🎉 Database ready! Total Voters: ${voters.toLocaleString()}, Jobs: ${jobs}, Parties: ${parties}`);
+
+  // Create/ensure performance indexes
+  try {
+    const dbRw = new Database(DB_PATH);
+    dbRw.exec(`
+      CREATE INDEX IF NOT EXISTS idx_vm_part_no ON voters_master(part_no);
+      CREATE INDEX IF NOT EXISTS idx_vm_epic ON voters_master(epic_id);
+      CREATE INDEX IF NOT EXISTS idx_vm_name ON voters_master(name_ta);
+      CREATE INDEX IF NOT EXISTS idx_vm_gender ON voters_master(gender);
+      CREATE INDEX IF NOT EXISTS idx_vm_deleted ON voters_master(is_deleted);
+      CREATE INDEX IF NOT EXISTS idx_vs_epic ON voter_surveys(epic_id);
+      CREATE INDEX IF NOT EXISTS idx_vs_agent ON voter_surveys(agent_id);
+      CREATE INDEX IF NOT EXISTS idx_vs_date ON voter_surveys(surveyed_at);
+      CREATE INDEX IF NOT EXISTS idx_pp_local ON polling_parts(local_body_name_ta);
+      CREATE INDEX IF NOT EXISTS idx_pp_ac ON polling_parts(ac_no);
+      CREATE INDEX IF NOT EXISTS idx_uj_user ON user_jurisdictions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_uj_part ON user_jurisdictions(part_no);
+      PRAGMA wal_checkpoint(TRUNCATE);
+    `);
+    dbRw.close();
+    console.log('⚡ All 12 performance indexes verified and applied.');
+  } catch (e) {
+    console.log('Index note:', e.message);
+  }
 }
 
 main().catch((err) => {

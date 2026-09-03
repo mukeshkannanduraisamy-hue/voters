@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { verifyToken, getTokenFromCookieHeader } from '@/lib/auth/jwt'
 import { getDb } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 type MasterType = 'castes' | 'jobs' | 'parties'
 
 const TABLE_MAP: Record<string, { table: string; nameCol: string }> = {

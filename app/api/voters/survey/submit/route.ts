@@ -5,6 +5,8 @@ import { surveySchema } from '@/lib/validations'
 import { assertVoterInScope } from '@/lib/auth/scope-guard'
 import { randomUUID } from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   const cookieHeader = request.headers.get('cookie')
   const token = getTokenFromCookieHeader(cookieHeader)

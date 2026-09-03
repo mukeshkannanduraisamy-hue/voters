@@ -34,6 +34,10 @@ interface Voter {
   local_body_name_ta: string
   is_surveyed: number
   phone_number?: string
+  caste_id?: number
+  job_id?: number
+  party_id?: number
+  other_job_text?: string
 }
 
 export default function MobileSurveyPage() {
@@ -126,11 +130,28 @@ export default function MobileSurveyPage() {
     setCorrectedFirstName(v.name_ta || '')
     setCorrectedLastName(v.relative_name_ta || '')
     setPhoneNumber(v.phone_number || '')
-    setSelectedCaste('')
-    setSelectedJobCategory('')
-    setSelectedJob('')
-    setOtherJobText('')
-    setSelectedParty('')
+    // Pre-fill from existing survey if already surveyed
+    if (v.is_surveyed && v.caste_id) {
+      setSelectedCaste(v.caste_id)
+    } else {
+      setSelectedCaste('')
+    }
+    if (v.is_surveyed && v.job_id) {
+      const existingJob = jobs.find((j) => j.id === v.job_id)
+      if (existingJob) {
+        setSelectedJobCategory(existingJob.category || '')
+      }
+      setSelectedJob(v.job_id)
+    } else {
+      setSelectedJobCategory('')
+      setSelectedJob('')
+    }
+    setOtherJobText(v.is_surveyed ? (v.other_job_text || '') : '')
+    if (v.is_surveyed && v.party_id) {
+      setSelectedParty(v.party_id)
+    } else {
+      setSelectedParty('')
+    }
     setSubmitSuccess(false)
     setSubmitError('')
   }
@@ -191,16 +212,26 @@ export default function MobileSurveyPage() {
         setSubmitError(data.error || 'Failed to submit survey')
       } else {
         setSubmitSuccess(true)
-        // Mark as surveyed in current search list
+        // Mark as surveyed with all new fields in current search list
         setVoters((prev) =>
           prev.map((v) =>
-            v.epic_id === selectedVoter.epic_id ? { ...v, is_surveyed: 1, phone_number: phoneNumber } : v
+            v.epic_id === selectedVoter.epic_id
+              ? {
+                  ...v,
+                  is_surveyed: 1,
+                  phone_number: phoneNumber,
+                  caste_id: Number(selectedCaste),
+                  job_id: Number(selectedJob),
+                  party_id: Number(selectedParty),
+                  other_job_text: otherJobText.trim() || undefined,
+                }
+              : v
           )
         )
         setTimeout(() => {
           setSelectedVoter(null)
           setSubmitSuccess(false)
-        }, 1200)
+        }, 1500)
       }
     } catch {
       setSubmitError('Network error while saving survey. Try again.')
