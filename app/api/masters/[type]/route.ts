@@ -111,9 +111,39 @@ export async function PATCH(
   }
 
   const body = await request.json()
-  const { id, is_active } = body
+  const { id } = body
+  if (!id) {
+    return NextResponse.json({ error: 'ID is required' }, { status: 400 })
+  }
 
   const db = getDb()
-  db.prepare(`UPDATE ${mapping.table} SET is_active = ? WHERE id = ?`).run(is_active ? 1 : 0, id)
-  return NextResponse.json({ success: true })
+
+  try {
+    if (typeof body.is_active === 'number') {
+      db.prepare(`UPDATE ${mapping.table} SET is_active = ? WHERE id = ?`).run(body.is_active ? 1 : 0, id)
+    }
+
+    if (body.name) {
+      if (params.type === 'parties' || params.type === 'party') {
+        db.prepare(
+          `UPDATE party_master SET party_name = ?, party_code = ?, color_code = ? WHERE id = ?`
+        ).run(body.name.trim(), body.party_code?.trim() || null, body.color_code || null, id)
+      } else if (params.type === 'castes' || params.type === 'caste') {
+        db.prepare(
+          `UPDATE caste_master SET caste_name = ?, category = ? WHERE id = ?`
+        ).run(body.name.trim(), body.category?.trim() || null, id)
+      } else {
+        db.prepare(
+          `UPDATE job_master SET job_title = ?, category = ? WHERE id = ?`
+        ).run(body.name.trim(), body.category?.trim() || null, id)
+      }
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.message?.includes('UNIQUE')) {
+      return NextResponse.json({ error: 'An item with this name already exists' }, { status: 409 })
+    }
+    return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+  }
 }
