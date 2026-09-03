@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
+    "prebuild": "node -e \"const fs=require('fs');if(!fs.existsSync('vms.db')&&fs.existsSync('vms.db.zip')){console.log('📦 Unpacking database...');const AdmZip=require('adm-zip');new AdmZip('vms.db.zip').extractAllTo('.',true);console.log('✅ Database ready!');}\"",
     "build": "next build",
-    "start": "next start -p 3000"
+    "start": "next start"
   },
   "dependencies": {
     "@tanstack/react-table": "^9.2.4",
+    "adm-zip": "^0.6.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
@@ -28,6 +30,7 @@
   },
   "devDependencies": {
     "@swc/helpers": "^0.5.23",
+    "@types/adm-zip": "^0.5.8",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.13.4",

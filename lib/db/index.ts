@@ -1,12 +1,25 @@
 import Database from 'better-sqlite3'
 import path from 'path'
+import fs from 'fs'
+import AdmZip from 'adm-zip'
 
 const DB_PATH = path.join(process.cwd(), 'vms.db')
+const ZIP_PATH = path.join(process.cwd(), 'vms.db.zip')
 
 let db: Database.Database | null = null
 
+function ensureDbFile() {
+  if (!fs.existsSync(DB_PATH) && fs.existsSync(ZIP_PATH)) {
+    console.log('📦 vms.db not found on disk. Unzipping vms.db.zip (16.7 MB)...')
+    const zip = new AdmZip(ZIP_PATH)
+    zip.extractAllTo(process.cwd(), true)
+    console.log('✅ vms.db successfully unpacked.')
+  }
+}
+
 export function getDb(): Database.Database {
   if (!db) {
+    ensureDbFile()
     db = new Database(DB_PATH)
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
