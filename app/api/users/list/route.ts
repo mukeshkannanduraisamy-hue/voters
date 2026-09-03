@@ -31,6 +31,7 @@ export async function GET(request: Request) {
       const parts = u.part_nos ? u.part_nos.split(',').map(Number) : []
       return {
         ...u,
+        part_ids: parts,
         parts_count: parts.length,
         parts_sample: parts.length > 5 ? parts.slice(0, 5).join(', ') + '...' : parts.join(', '),
       }
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
       const parts = u.part_nos ? Array.from(new Set(u.part_nos.split(',').map(Number))) : []
       return {
         ...u,
+        part_ids: parts,
         parts_count: parts.length,
         parts_sample: parts.length > 5 ? parts.slice(0, 5).join(', ') + '...' : parts.join(', '),
       }

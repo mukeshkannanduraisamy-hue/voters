@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   List,
   FolderTree,
+  Upload,
 } from 'lucide-react'
 
 type TabType = 'castes' | 'jobs' | 'parties'
@@ -57,10 +58,30 @@ export default function MasterDataPage() {
   const [formCode, setFormCode] = useState('')
   const [formColor, setFormColor] = useState('#2563eb')
   const [formSymbolImg, setFormSymbolImg] = useState('/parties/independent.svg')
+  const [uploadMode, setUploadMode] = useState<'upload' | 'preset'>('upload')
+  const [uploadFileName, setUploadFileName] = useState('')
+  const [uploadFileSize, setUploadFileSize] = useState('')
   const [formError, setFormError] = useState('')
   const [formSuccess, setFormSuccess] = useState('')
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState<number | null>(null)
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Please select an image smaller than 2 MB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64String = reader.result as string
+      setFormSymbolImg(base64String)
+      setUploadFileName(file.name)
+      setUploadFileSize(`${(file.size / 1024).toFixed(1)} KB`)
+    }
+    reader.readAsDataURL(file)
+  }
 
   // Load ALL master data (both active and disabled) from /api/masters/[type]
   async function loadData() {
@@ -119,7 +140,17 @@ export default function MasterDataPage() {
     setFormCategory(item.category || '')
     setFormCode(item.party_code || '')
     setFormColor(item.color_code || '#2563eb')
-    setFormSymbolImg(item.symbol_img || '/parties/independent.svg')
+    const sym = item.symbol_img || '/parties/independent.svg'
+    setFormSymbolImg(sym)
+    if (sym.startsWith('data:image')) {
+      setUploadMode('upload')
+      setUploadFileName('Stored Base64 Picture')
+      setUploadFileSize(`${(sym.length / 1024).toFixed(1)} KB`)
+    } else {
+      setUploadMode('preset')
+      setUploadFileName('')
+      setUploadFileSize('')
+    }
     setFormError('')
     setFormSuccess('')
     setShowAddModal(true)
@@ -133,6 +164,9 @@ export default function MasterDataPage() {
     setFormCode('')
     setFormColor('#2563eb')
     setFormSymbolImg('/parties/independent.svg')
+    setUploadMode('upload')
+    setUploadFileName('')
+    setUploadFileSize('')
     setFormError('')
     setFormSuccess('')
     setShowAddModal(true)
@@ -872,13 +906,41 @@ export default function MasterDataPage() {
                     </div>
                   </div>
 
-                  {/* Party Symbol / Emblem Image */}
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">
-                      Party Symbol / Flag Image (சின்னம் படம்)
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl border border-slate-200 bg-white p-1 flex items-center justify-center shadow-sm flex-shrink-0">
+                  {/* Party Symbol / Emblem Image Upload & Preset */}
+                  <div className="space-y-2.5 p-3.5 bg-slate-100/70 rounded-2xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide">
+                        Party Symbol Picture (சின்னம் படம்) *
+                      </label>
+                      <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 text-[11px] font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setUploadMode('upload')}
+                          className={`px-2 py-0.5 rounded transition ${
+                            uploadMode === 'upload'
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          📤 Upload (Base64)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUploadMode('preset')}
+                          className={`px-2 py-0.5 rounded transition ${
+                            uploadMode === 'preset'
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          🎨 Presets
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Live Preview Box */}
+                    <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <div className="w-14 h-14 rounded-xl border border-slate-200 bg-white p-1 flex items-center justify-center shadow-xs flex-shrink-0">
                         <img
                           src={formSymbolImg || '/parties/independent.svg'}
                           alt="Party Symbol Preview"
@@ -888,11 +950,70 @@ export default function MasterDataPage() {
                           }}
                         />
                       </div>
-                      <div className="flex-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-900 truncate">
+                          {uploadFileName || (formSymbolImg.startsWith('data:image') ? 'Base64 Encoded Image' : 'Preset Vector Emblem')}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {uploadFileSize ? `Size: ${uploadFileSize} • ` : ''}
+                          {formSymbolImg.startsWith('data:image') ? 'Stores as Base64 in Database' : 'Pre-bundled Vector Symbol'}
+                        </div>
+                        {formSymbolImg.startsWith('data:image') && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded mt-1 border border-emerald-200">
+                            ✓ Base64 Ready
+                          </span>
+                        )}
+                      </div>
+                      {formSymbolImg && formSymbolImg !== '/parties/independent.svg' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormSymbolImg('/parties/independent.svg')
+                            setUploadFileName('')
+                            setUploadFileSize('')
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          title="Reset image"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Mode 1: File Upload */}
+                    {uploadMode === 'upload' ? (
+                      <div>
+                        <label
+                          htmlFor="party-file-upload"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-xl bg-blue-50/40 hover:bg-blue-50 cursor-pointer transition text-center"
+                        >
+                          <Upload className="w-5 h-5 text-blue-600 mb-1" />
+                          <span className="text-xs font-bold text-blue-700">
+                            Click to Browse or Drag & Drop Image File
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-0.5">
+                            PNG, JPG, SVG, WebP up to 2MB (Auto-encoded to Base64)
+                          </span>
+                          <input
+                            id="party-file-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      /* Mode 2: Standard Presets */
+                      <div>
                         <select
                           value={formSymbolImg}
-                          onChange={(e) => setFormSymbolImg(e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                          onChange={(e) => {
+                            setFormSymbolImg(e.target.value)
+                            setUploadFileName('')
+                            setUploadFileSize('')
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
                         >
                           <option value="/parties/dmk.svg">DMK - Rising Sun (உதயசூரியன்)</option>
                           <option value="/parties/aiadmk.svg">AIADMK - Two Leaves (இரட்டை இலை)</option>
@@ -905,11 +1026,8 @@ export default function MasterDataPage() {
                           <option value="/parties/neutral.svg">Neutral - Balance Scale (தராசு)</option>
                           <option value="/parties/independent.svg">Independent / Star (சுயேச்சை)</option>
                         </select>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          Vector SVG symbol scales perfectly on all mobile, tablet, and desktop screens.
-                        </p>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
