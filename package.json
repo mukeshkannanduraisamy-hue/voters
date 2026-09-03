@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node -e \"const fs=require('fs');if(!fs.existsSync('vms.db')&&fs.existsSync('vms.db.zip')){console.log('📦 Unpacking database...');const AdmZip=require('adm-zip');new AdmZip('vms.db.zip').extractAllTo('.',true);console.log('✅ Database ready!');}\"",
+    "prebuild": "node scripts/sync-db.js",
     "build": "next build",
     "start": "next start"
   },

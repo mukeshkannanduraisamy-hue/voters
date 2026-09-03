@@ -12,8 +12,9 @@ out/
 build/
 dist/
 
-# SQLite Database (exceeds GitHub 100MB limit: ~163MB)
+# SQLite Database & Archives (hosted on GitHub Releases)
 vms.db
+vms.db.zip
 vms.db-journal
 vms.db-wal
 vms.db-shm
