@@ -21,18 +21,23 @@ import {
   Laptop,
   Tablet,
   Phone,
+  Users,
 } from 'lucide-react'
 
 interface AppHeaderProps {
   role?: 'A1_SUPER_ADMIN' | 'A2_SUPERVISOR' | 'A3_FIELD_AGENT'
   onToggleSidebar?: () => void
   isSidebarOpen?: boolean
+  viewMode?: 'desktop' | 'tablet' | 'mobile'
+  onViewModeChange?: (mode: 'desktop' | 'tablet' | 'mobile') => void
 }
 
 export default function AppHeader({
   role = 'A1_SUPER_ADMIN',
   onToggleSidebar,
   isSidebarOpen = false,
+  viewMode = 'desktop',
+  onViewModeChange,
 }: AppHeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -146,22 +151,53 @@ export default function AppHeader({
           </div>
         </div>
 
-        {/* Center: Responsive Device Preview Pills (Hidden on very small phones) */}
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-xl text-[11px] font-semibold text-slate-600">
-          <span className="flex items-center gap-1 text-slate-400">
+        {/* Center: Responsive Device Preview Switcher (Interactive Selection) */}
+        <div className="hidden md:flex items-center p-1 bg-slate-100 rounded-xl text-[11px] font-semibold text-slate-600 gap-1 border border-slate-200/70 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => onViewModeChange?.('desktop')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+              viewMode === 'desktop'
+                ? 'bg-blue-600 text-white shadow-2xs font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+            title="Switch to Full Desktop View"
+          >
             <Laptop className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Desktop</span>
-          </span>
+            <span>Desktop</span>
+          </button>
+
           <span className="text-slate-300">•</span>
-          <span className="flex items-center gap-1 text-slate-400">
+
+          <button
+            type="button"
+            onClick={() => onViewModeChange?.('tablet')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+              viewMode === 'tablet'
+                ? 'bg-blue-600 text-white shadow-2xs font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+            }`}
+            title="Switch to Tablet View Preview (768px)"
+          >
             <Tablet className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Tablet</span>
-          </span>
+            <span>Tablet</span>
+          </button>
+
           <span className="text-slate-300">•</span>
-          <span className="flex items-center gap-1 text-emerald-600 font-bold">
+
+          <button
+            type="button"
+            onClick={() => onViewModeChange?.('mobile')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+              viewMode === 'mobile'
+                ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                : 'text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50'
+            }`}
+            title="Switch to Mobile Phone View Preview (384px)"
+          >
             <Phone className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Mobile</span> Ready
-          </span>
+            <span>Mobile Ready</span>
+          </button>
         </div>
 
         {/* Right Side: SMALL CORNER OPTION MENU */}
@@ -265,11 +301,11 @@ export default function AppHeader({
                     <span>245k Directory</span>
                   </Link>
                   <Link
-                    href="/survey/booth"
-                    className="flex items-center gap-2 p-2 rounded-xl text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium transition"
+                    href="/admin/users"
+                    className="flex items-center gap-2 p-2 rounded-xl text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-medium transition"
                   >
-                    <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Mobile Survey</span>
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <span>User Accounts</span>
                   </Link>
                   <Link
                     href="/admin/masters"

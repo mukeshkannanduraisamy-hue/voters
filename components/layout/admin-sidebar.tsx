@@ -71,12 +71,6 @@ export default function AdminSidebar({ role, isOpen = false, onClose }: AdminSid
           },
         ]
       : []),
-    {
-      label: 'Field Survey App',
-      tamilLabel: 'கள ஆய்வு செயலி',
-      href: '/survey/booth',
-      icon: Smartphone,
-    },
   ]
 
   const sidebarContent = (

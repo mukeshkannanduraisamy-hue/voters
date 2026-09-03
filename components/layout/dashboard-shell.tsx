@@ -11,9 +11,10 @@ interface DashboardShellProps {
 
 export default function DashboardShell({ role, children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-100 overflow-hidden">
       {/* Responsive Sidebar (Docked on Desktop, Drawer on Tablet/Phone) */}
       <AdminSidebar
         role={role}
@@ -27,10 +28,22 @@ export default function DashboardShell({ role, children }: DashboardShellProps) 
           role={role}
           isSidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
         />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <div className="flex-1 overflow-y-auto bg-slate-50 flex justify-center items-start p-0">
+          <main
+            className={`transition-all duration-300 w-full ${
+              viewMode === 'tablet'
+                ? 'max-w-3xl my-4 bg-white rounded-2xl shadow-xl border border-slate-200 ring-4 ring-slate-200/60 overflow-hidden min-h-[calc(100vh-85px)]'
+                : viewMode === 'mobile'
+                ? 'max-w-sm my-4 bg-white rounded-3xl shadow-2xl border-4 border-slate-800 ring-8 ring-slate-200/60 overflow-hidden min-h-[calc(100vh-85px)]'
+                : 'w-full'
+            }`}
+          >
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   )

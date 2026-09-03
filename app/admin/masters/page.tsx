@@ -58,7 +58,6 @@ export default function MasterDataPage() {
   const [formCode, setFormCode] = useState('')
   const [formColor, setFormColor] = useState('#2563eb')
   const [formSymbolImg, setFormSymbolImg] = useState('/parties/independent.svg')
-  const [uploadMode, setUploadMode] = useState<'upload' | 'preset'>('upload')
   const [uploadFileName, setUploadFileName] = useState('')
   const [uploadFileSize, setUploadFileSize] = useState('')
   const [formError, setFormError] = useState('')
@@ -140,14 +139,12 @@ export default function MasterDataPage() {
     setFormCategory(item.category || '')
     setFormCode(item.party_code || '')
     setFormColor(item.color_code || '#2563eb')
-    const sym = item.symbol_img || '/parties/independent.svg'
+    const sym = item.symbol_img || ''
     setFormSymbolImg(sym)
     if (sym.startsWith('data:image')) {
-      setUploadMode('upload')
       setUploadFileName('Stored Base64 Picture')
       setUploadFileSize(`${(sym.length / 1024).toFixed(1)} KB`)
     } else {
-      setUploadMode('preset')
       setUploadFileName('')
       setUploadFileSize('')
     }
@@ -163,8 +160,7 @@ export default function MasterDataPage() {
     setFormCategory(preselectedCategory || '')
     setFormCode('')
     setFormColor('#2563eb')
-    setFormSymbolImg('/parties/independent.svg')
-    setUploadMode('upload')
+    setFormSymbolImg('')
     setUploadFileName('')
     setUploadFileSize('')
     setFormError('')
@@ -907,35 +903,15 @@ export default function MasterDataPage() {
                   </div>
 
                   {/* Party Symbol / Emblem Image Upload & Preset */}
+                  {/* Party Picture File Upload (Stored as Base64 in Database) */}
                   <div className="space-y-2.5 p-3.5 bg-slate-100/70 rounded-2xl border border-slate-200">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide">
-                        Party Symbol Picture (சின்னம் படம்) *
+                        Party Picture (சின்னம் படம்) *
                       </label>
-                      <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 text-[11px] font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => setUploadMode('upload')}
-                          className={`px-2 py-0.5 rounded transition ${
-                            uploadMode === 'upload'
-                              ? 'bg-blue-600 text-white shadow-2xs'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          📤 Upload (Base64)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setUploadMode('preset')}
-                          className={`px-2 py-0.5 rounded transition ${
-                            uploadMode === 'preset'
-                              ? 'bg-blue-600 text-white shadow-2xs'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          🎨 Presets
-                        </button>
-                      </div>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Base64 Storage in DB
+                      </span>
                     </div>
 
                     {/* Live Preview Box */}
@@ -943,7 +919,7 @@ export default function MasterDataPage() {
                       <div className="w-14 h-14 rounded-xl border border-slate-200 bg-white p-1 flex items-center justify-center shadow-xs flex-shrink-0">
                         <img
                           src={formSymbolImg || '/parties/independent.svg'}
-                          alt="Party Symbol Preview"
+                          alt="Party Picture Preview"
                           className="w-full h-full object-contain"
                           onError={(e) => {
                             ;(e.target as HTMLImageElement).src = '/parties/independent.svg'
@@ -952,82 +928,56 @@ export default function MasterDataPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-bold text-slate-900 truncate">
-                          {uploadFileName || (formSymbolImg.startsWith('data:image') ? 'Base64 Encoded Image' : 'Preset Vector Emblem')}
+                          {uploadFileName || (formSymbolImg.startsWith('data:image') ? 'Base64 Picture Stored' : 'Party Symbol')}
                         </div>
                         <div className="text-[10px] text-slate-500 mt-0.5">
                           {uploadFileSize ? `Size: ${uploadFileSize} • ` : ''}
-                          {formSymbolImg.startsWith('data:image') ? 'Stores as Base64 in Database' : 'Pre-bundled Vector Symbol'}
+                          Stored as Base64 directly in database
                         </div>
                         {formSymbolImg.startsWith('data:image') && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded mt-1 border border-emerald-200">
-                            ✓ Base64 Ready
+                            ✓ Base64 Image Ready
                           </span>
                         )}
                       </div>
-                      {formSymbolImg && formSymbolImg !== '/parties/independent.svg' && (
+                      {formSymbolImg && (
                         <button
                           type="button"
                           onClick={() => {
-                            setFormSymbolImg('/parties/independent.svg')
+                            setFormSymbolImg('')
                             setUploadFileName('')
                             setUploadFileSize('')
                           }}
                           className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                          title="Reset image"
+                          title="Remove picture"
                         >
                           <X className="w-4 h-4" />
                         </button>
                       )}
                     </div>
 
-                    {/* Mode 1: File Upload */}
-                    {uploadMode === 'upload' ? (
-                      <div>
-                        <label
-                          htmlFor="party-file-upload"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-xl bg-blue-50/40 hover:bg-blue-50 cursor-pointer transition text-center"
-                        >
-                          <Upload className="w-5 h-5 text-blue-600 mb-1" />
-                          <span className="text-xs font-bold text-blue-700">
-                            Click to Browse or Drag & Drop Image File
-                          </span>
-                          <span className="text-[10px] text-slate-400 mt-0.5">
-                            PNG, JPG, SVG, WebP up to 2MB (Auto-encoded to Base64)
-                          </span>
-                          <input
-                            id="party-file-upload"
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            className="hidden"
-                          />
-                        </label>
-                      </div>
-                    ) : (
-                      /* Mode 2: Standard Presets */
-                      <div>
-                        <select
-                          value={formSymbolImg}
-                          onChange={(e) => {
-                            setFormSymbolImg(e.target.value)
-                            setUploadFileName('')
-                            setUploadFileSize('')
-                          }}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
-                        >
-                          <option value="/parties/dmk.svg">DMK - Rising Sun (உதயசூரியன்)</option>
-                          <option value="/parties/aiadmk.svg">AIADMK - Two Leaves (இரட்டை இலை)</option>
-                          <option value="/parties/bjp.svg">BJP - Lotus (தாமரை மலர்)</option>
-                          <option value="/parties/inc.svg">INC - Hand (கை சின்னம்)</option>
-                          <option value="/parties/pmk.svg">PMK - Mango (மாம்பழம்)</option>
-                          <option value="/parties/ntk.svg">NTK - Mic / Megaphone (ஒலிவாங்கி)</option>
-                          <option value="/parties/tvk.svg">TVK - Party Flag (தமிழக வெற்றிக் கழகம்)</option>
-                          <option value="/parties/vck.svg">VCK - Pot / பானை</option>
-                          <option value="/parties/neutral.svg">Neutral - Balance Scale (தராசு)</option>
-                          <option value="/parties/independent.svg">Independent / Star (சுயேச்சை)</option>
-                        </select>
-                      </div>
-                    )}
+                    {/* File Upload Box */}
+                    <div>
+                      <label
+                        htmlFor="party-file-upload"
+                        className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-xl bg-blue-50/40 hover:bg-blue-50 cursor-pointer transition text-center"
+                      >
+                        <Upload className="w-5 h-5 text-blue-600 mb-1" />
+                        <span className="text-xs font-bold text-blue-700">
+                          Click to Browse or Drag & Drop Party Picture
+                        </span>
+                        <span className="text-[10px] text-slate-400 mt-0.5">
+                          PNG, JPG, SVG, WebP up to 2MB (Auto-encoded to Base64)
+                        </span>
+                        <input
+                          id="party-file-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}
