@@ -526,8 +526,14 @@ export default function MobileSurveyPage() {
                   onChange={(e) => {
                     const cat = e.target.value
                     setSelectedJobCategory(cat)
-                    setSelectedJob('')
                     setOtherJobText('')
+                    // Auto-select first sub-job for fastest survey flow
+                    const subJobs = jobs.filter((j) => j.category === cat)
+                    if (subJobs.length > 0) {
+                      setSelectedJob(subJobs[0].id)
+                    } else {
+                      setSelectedJob('')
+                    }
                   }}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
@@ -585,24 +591,79 @@ export default function MobileSurveyPage() {
               )}
             </div>
 
-            {/* 4. Party Dropdown */}
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                4. BELONGS TO WHICH PART / PARTY * (கட்சி ஆதரவு)
-              </label>
-              <select
-                required
-                value={selectedParty}
-                onChange={(e) => setSelectedParty(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              >
-                <option value="">-- Select Party Affiliation --</option>
-                {parties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.party_name}
-                  </option>
-                ))}
-              </select>
+            {/* 4. Party Selector with Symbol Images & Auto-Select */}
+            <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold text-slate-800 uppercase tracking-wide">
+                  4. PARTY AFFILIATION * (கட்சி ஆதரவு / சின்னம்)
+                </label>
+                <span className="text-[10px] text-blue-600 font-semibold">Tap Card to Select</span>
+              </div>
+
+              {/* Visual Party Symbol Cards Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                {parties.map((p) => {
+                  const isSelected = selectedParty === p.id
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedParty(p.id)}
+                      className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all duration-150 relative ${
+                        isSelected
+                          ? 'bg-blue-50/90 border-blue-500 ring-2 ring-blue-500/30 shadow-sm'
+                          : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {/* Party Symbol Image */}
+                      <div className="w-8 h-8 rounded-lg bg-white p-0.5 border border-slate-200/80 shadow-xs flex items-center justify-center flex-shrink-0">
+                        <img
+                          src={p.symbol_img || '/parties/independent.svg'}
+                          alt={p.party_name}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            ;(e.target as HTMLImageElement).src = '/parties/independent.svg'
+                          }}
+                        />
+                      </div>
+
+                      {/* Party Info */}
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <div className="font-bold text-xs text-slate-900 truncate">
+                          {p.party_code || p.party_name.split(' ')[0]}
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          {p.party_name}
+                        </div>
+                      </div>
+
+                      {/* Selected Indicator */}
+                      {isSelected && (
+                        <div className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                          ✓
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Dropdown fallback */}
+              <div className="pt-1">
+                <select
+                  required
+                  value={selectedParty}
+                  onChange={(e) => setSelectedParty(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="">-- Or choose from party list --</option>
+                  {parties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.party_code ? `[${p.party_code}] ` : ''}{p.party_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 

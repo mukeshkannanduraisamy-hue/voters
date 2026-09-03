@@ -63,8 +63,8 @@ export async function POST(
         return NextResponse.json({ id: existing.id, existing: true })
       }
       const result = db.prepare(
-        `INSERT INTO party_master (party_name, party_code, color_code, is_active, created_at) VALUES (?, ?, ?, 1, ?)`
-      ).run(body.name, body.party_code || null, body.color_code || null, now)
+        `INSERT INTO party_master (party_name, party_code, color_code, symbol_img, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)`
+      ).run(body.name, body.party_code || null, body.color_code || null, body.symbol_img || '/parties/independent.svg', now)
       return NextResponse.json({ id: result.lastInsertRowid })
     } else if (params.type === 'castes' || params.type === 'caste') {
       const existing = db.prepare('SELECT id FROM caste_master WHERE caste_name = ?').get(body.name) as { id: number } | undefined
@@ -126,8 +126,8 @@ export async function PATCH(
     if (body.name) {
       if (params.type === 'parties' || params.type === 'party') {
         db.prepare(
-          `UPDATE party_master SET party_name = ?, party_code = ?, color_code = ? WHERE id = ?`
-        ).run(body.name.trim(), body.party_code?.trim() || null, body.color_code || null, id)
+          `UPDATE party_master SET party_name = ?, party_code = ?, color_code = ?, symbol_img = COALESCE(?, symbol_img) WHERE id = ?`
+        ).run(body.name.trim(), body.party_code?.trim() || null, body.color_code || null, body.symbol_img || null, id)
       } else if (params.type === 'castes' || params.type === 'caste') {
         db.prepare(
           `UPDATE caste_master SET caste_name = ?, category = ? WHERE id = ?`

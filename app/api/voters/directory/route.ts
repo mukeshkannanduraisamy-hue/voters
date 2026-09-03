@@ -125,6 +125,7 @@ export async function GET(request: Request) {
       vs.other_job_text,
       pt.party_name,
       pt.color_code,
+      pt.symbol_img,
       CASE WHEN vs.epic_id IS NOT NULL THEN 1 ELSE 0 END as is_surveyed
     FROM voters_master v
     JOIN polling_parts p ON v.part_no = p.part_no

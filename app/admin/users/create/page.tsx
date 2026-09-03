@@ -350,8 +350,34 @@ export default function CreateUserPage() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                2. PANCHAYAT / TOWN (MULTI-SELECT) *
+                2. LOCAL BODY / PANCHAYAT (உள்ளாட்சி அமைப்பு)
               </label>
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allNames = localBodies.map((b) => b.name)
+                    setSelectedBodies(allNames)
+                    setSelectedParts(localBodies.flatMap((b) => b.part_nos))
+                  }}
+                  className="text-blue-600 hover:underline font-semibold"
+                >
+                  ⚡ Auto-Select All
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedBodies([])
+                    setSelectedParts([])
+                  }}
+                  className="text-slate-500 hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="mb-2">
               <span className="text-xs text-blue-600 font-medium">
                 {selectedBodies.length} Selected
               </span>

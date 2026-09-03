@@ -48,6 +48,7 @@ interface VoterRecord {
   other_job_text: string | null
   party_name: string | null
   color_code: string | null
+  symbol_img: string | null
   is_surveyed: number
 }
 
@@ -194,7 +195,7 @@ function VoterDirectoryContent() {
     : []
 
   return (
-    <div className="p-6 max-w-[1440px] mx-auto space-y-6">
+    <div className="p-3.5 sm:p-5 lg:p-6 max-w-[1440px] mx-auto space-y-5 sm:space-y-6">
       {/* Top Breadcrumb & Title Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -582,11 +583,14 @@ function VoterDirectoryContent() {
                               ✓ Surveyed
                             </span>
                             {voter.party_name && (
-                              <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
-                                <span
-                                  className="w-2 h-2 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: voter.color_code || '#2563eb' }}
-                                />
+                              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+                                <div className="w-4 h-4 rounded bg-white p-0.5 border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
+                                  <img
+                                    src={voter.symbol_img || '/parties/independent.svg'}
+                                    alt={voter.party_name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                </div>
                                 <span>{voter.party_name}</span>
                               </div>
                             )}
@@ -763,11 +767,14 @@ function VoterDirectoryContent() {
 
                   <div>
                     <span className="text-emerald-700 block text-[11px]">Political Leaning</span>
-                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: selectedVoter.color_code || '#2563eb' }}
-                      />
+                    <span className="font-bold text-slate-900 flex items-center gap-2 mt-0.5">
+                      <div className="w-6 h-6 rounded-lg bg-white p-0.5 border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
+                        <img
+                          src={selectedVoter.symbol_img || '/parties/independent.svg'}
+                          alt={selectedVoter.party_name || 'Party'}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
                       <span>{selectedVoter.party_name || '—'}</span>
                     </span>
                   </div>

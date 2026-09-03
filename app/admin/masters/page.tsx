@@ -31,6 +31,7 @@ interface MasterItem {
   category?: string | null
   party_code?: string | null
   color_code?: string | null
+  symbol_img?: string | null
   is_active: number
   created_at?: string
 }
@@ -55,6 +56,7 @@ export default function MasterDataPage() {
   const [formCategory, setFormCategory] = useState('')
   const [formCode, setFormCode] = useState('')
   const [formColor, setFormColor] = useState('#2563eb')
+  const [formSymbolImg, setFormSymbolImg] = useState('/parties/independent.svg')
   const [formError, setFormError] = useState('')
   const [formSuccess, setFormSuccess] = useState('')
   const [saving, setSaving] = useState(false)
@@ -117,6 +119,7 @@ export default function MasterDataPage() {
     setFormCategory(item.category || '')
     setFormCode(item.party_code || '')
     setFormColor(item.color_code || '#2563eb')
+    setFormSymbolImg(item.symbol_img || '/parties/independent.svg')
     setFormError('')
     setFormSuccess('')
     setShowAddModal(true)
@@ -129,6 +132,7 @@ export default function MasterDataPage() {
     setFormCategory(preselectedCategory || '')
     setFormCode('')
     setFormColor('#2563eb')
+    setFormSymbolImg('/parties/independent.svg')
     setFormError('')
     setFormSuccess('')
     setShowAddModal(true)
@@ -165,6 +169,7 @@ export default function MasterDataPage() {
             category: formCategory.trim() || undefined,
             party_code: formCode.trim() || undefined,
             color_code: formColor || undefined,
+            symbol_img: activeTab === 'parties' ? formSymbolImg : undefined,
           }),
         })
 
@@ -183,6 +188,7 @@ export default function MasterDataPage() {
             category: formCategory.trim() || undefined,
             party_code: formCode.trim() || undefined,
             color_code: formColor || undefined,
+            symbol_img: activeTab === 'parties' ? formSymbolImg : undefined,
           }),
         })
 
@@ -268,7 +274,7 @@ export default function MasterDataPage() {
   const disabledCount = currentList.filter((i) => i.is_active === 0).length
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-5 sm:space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -652,10 +658,16 @@ export default function MasterDataPage() {
 
                         <td className="px-5 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
                           {activeTab === 'parties' && (
-                            <span
-                              className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-slate-200"
-                              style={{ backgroundColor: item.color_code || '#2563eb' }}
-                            />
+                            <div className="w-8 h-8 rounded-lg bg-white p-1 border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
+                              <img
+                                src={item.symbol_img || '/parties/independent.svg'}
+                                alt={title}
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  ;(e.target as HTMLImageElement).src = '/parties/independent.svg'
+                                }}
+                              />
+                            </div>
                           )}
                           <span className="text-sm">{title}</span>
                         </td>
@@ -824,37 +836,79 @@ export default function MasterDataPage() {
               )}
 
               {activeTab === 'parties' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">
-                      Party Short Code
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. DMK, AIADMK"
-                      value={formCode}
-                      onChange={(e) => setFormCode(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">
-                      Flag / Branding Color
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={formColor}
-                        onChange={(e) => setFormColor(e.target.value)}
-                        className="w-10 h-9 p-0.5 border border-slate-200 rounded-lg cursor-pointer bg-white"
-                      />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase mb-1">
+                        Party Short Code
+                      </label>
                       <input
                         type="text"
-                        value={formColor}
-                        onChange={(e) => setFormColor(e.target.value)}
-                        className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
+                        placeholder="e.g. DMK, AIADMK"
+                        value={formCode}
+                        onChange={(e) => setFormCode(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase mb-1">
+                        Flag / Branding Color
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={formColor}
+                          onChange={(e) => setFormColor(e.target.value)}
+                          className="w-10 h-9 p-0.5 border border-slate-200 rounded-lg cursor-pointer bg-white"
+                        />
+                        <input
+                          type="text"
+                          value={formColor}
+                          onChange={(e) => setFormColor(e.target.value)}
+                          className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Party Symbol / Emblem Image */}
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">
+                      Party Symbol / Flag Image (சின்னம் படம்)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl border border-slate-200 bg-white p-1 flex items-center justify-center shadow-sm flex-shrink-0">
+                        <img
+                          src={formSymbolImg || '/parties/independent.svg'}
+                          alt="Party Symbol Preview"
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            ;(e.target as HTMLImageElement).src = '/parties/independent.svg'
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <select
+                          value={formSymbolImg}
+                          onChange={(e) => setFormSymbolImg(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          <option value="/parties/dmk.svg">DMK - Rising Sun (உதயசூரியன்)</option>
+                          <option value="/parties/aiadmk.svg">AIADMK - Two Leaves (இரட்டை இலை)</option>
+                          <option value="/parties/bjp.svg">BJP - Lotus (தாமரை மலர்)</option>
+                          <option value="/parties/inc.svg">INC - Hand (கை சின்னம்)</option>
+                          <option value="/parties/pmk.svg">PMK - Mango (மாம்பழம்)</option>
+                          <option value="/parties/ntk.svg">NTK - Mic / Megaphone (ஒலிவாங்கி)</option>
+                          <option value="/parties/tvk.svg">TVK - Party Flag (தமிழக வெற்றிக் கழகம்)</option>
+                          <option value="/parties/vck.svg">VCK - Pot / பானை</option>
+                          <option value="/parties/neutral.svg">Neutral - Balance Scale (தராசு)</option>
+                          <option value="/parties/independent.svg">Independent / Star (சுயேச்சை)</option>
+                        </select>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Vector SVG symbol scales perfectly on all mobile, tablet, and desktop screens.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

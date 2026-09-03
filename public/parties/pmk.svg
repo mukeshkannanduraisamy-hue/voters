@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="mangoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="30%" stop-color="#facc15"/>
+      <stop offset="70%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Badge -->
+  <circle cx="50" cy="50" r="48" fill="#ffffff" stroke="#facc15" stroke-width="2"/>
+  <!-- Mango Leaf -->
+  <path d="M 52 24 C 52 14, 68 14, 72 20 C 66 26, 58 26, 52 24 Z" fill="#15803d"/>
+  <path d="M 52 24 Q 62 18, 70 20" stroke="#86efac" stroke-width="1" fill="none"/>
+  <!-- Stalk -->
+  <path d="M 48 28 Q 50 20, 52 24" stroke="#713f12" stroke-width="3" fill="none"/>
+  <!-- Ripe Mango (மாம்பழம்) -->
+  <path d="M 46 26 C 64 24, 76 38, 72 54 C 68 68, 48 74, 38 68 C 26 62, 24 46, 32 36 C 36 30, 42 27, 46 26 Z" fill="url(#mangoGrad)" stroke="#c2410c" stroke-width="1.5"/>
+  <!-- Mango tip curve -->
+  <path d="M 38 68 C 36 71, 33 70, 32 67" stroke="#b45309" stroke-width="2" fill="none"/>
+  <!-- Bottom Badge -->
+  <rect x="25" y="76" width="50" height="14" rx="4" fill="#ca8a04"/>
+  <text x="50" y="86.5" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="9" font-weight="900" letter-spacing="1">PMK</text>
+</svg>
