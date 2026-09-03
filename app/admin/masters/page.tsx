@@ -14,9 +14,14 @@ import {
   X,
   AlertCircle,
   Sparkles,
+  Layers,
+  LayoutGrid,
+  List,
+  FolderTree,
 } from 'lucide-react'
 
 type TabType = 'castes' | 'jobs' | 'parties'
+type JobViewMode = 'grouped' | 'table'
 
 interface MasterItem {
   id: number
@@ -31,13 +36,17 @@ interface MasterItem {
 }
 
 export default function MasterDataPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('castes')
+  const [activeTab, setActiveTab] = useState<TabType>('jobs')
   const [castes, setCastes] = useState<MasterItem[]>([])
   const [jobs, setJobs] = useState<MasterItem[]>([])
   const [parties, setParties] = useState<MasterItem[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled'>('all')
+
+  // Job specific view mode & sector filter
+  const [jobViewMode, setJobViewMode] = useState<JobViewMode>('grouped')
+  const [selectedSector, setSelectedSector] = useState<string>('all')
 
   // Modals & form state
   const [showAddModal, setShowAddModal] = useState(false)
@@ -113,11 +122,11 @@ export default function MasterDataPage() {
     setShowAddModal(true)
   }
 
-  // Open Create Modal
-  function openCreateModal() {
+  // Open Create Modal (optionally with pre-selected category)
+  function openCreateModal(preselectedCategory?: string) {
     setEditingItem(null)
     setFormName('')
-    setFormCategory('')
+    setFormCategory(preselectedCategory || '')
     setFormCode('')
     setFormColor('#2563eb')
     setFormError('')
@@ -129,7 +138,12 @@ export default function MasterDataPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!formName.trim()) {
-      setFormError('Please enter a name / title.')
+      setFormError('Please enter a title / name.')
+      return
+    }
+
+    if (activeTab === 'jobs' && !formCategory.trim()) {
+      setFormError('Please choose or enter a Main Sector / Category.')
       return
     }
 
@@ -192,10 +206,15 @@ export default function MasterDataPage() {
     }
   }
 
+  // Unique job categories from master
+  const distinctSectors = Array.from(
+    new Set(jobs.map((j) => j.category).filter(Boolean))
+  ) as string[]
+
   // Current active dataset
   const currentList = activeTab === 'castes' ? castes : activeTab === 'jobs' ? jobs : parties
 
-  // Filtering by search query & status
+  // Filtering by search query, status, and optional sector
   const filteredList = currentList.filter((item) => {
     const name = (item.caste_name || item.job_title || item.party_name || '').toLowerCase()
     const category = (item.category || item.party_code || '').toLowerCase()
@@ -209,7 +228,38 @@ export default function MasterDataPage() {
         ? item.is_active === 1
         : item.is_active === 0
 
-    return matchesSearch && matchesStatus
+    const matchesSector =
+      activeTab !== 'jobs' || selectedSector === 'all' || item.category === selectedSector
+
+    return matchesSearch && matchesStatus && matchesSector
+  })
+
+  // Grouped jobs by sector
+  const groupedJobs: Record<string, MasterItem[]> = {}
+  distinctSectors.forEach((sec) => {
+    groupedJobs[sec] = []
+  })
+  // Handle any uncategorized
+  groupedJobs['Other / பொது'] = []
+
+  jobs.forEach((j) => {
+    const cat = j.category || 'Other / பொது'
+    if (!groupedJobs[cat]) groupedJobs[cat] = []
+
+    // Apply search and status filter to grouped view as well
+    const name = (j.job_title || '').toLowerCase()
+    const query = searchQuery.toLowerCase().trim()
+    const matchesSearch = !query || name.includes(query) || cat.toLowerCase().includes(query)
+    const matchesStatus =
+      statusFilter === 'all'
+        ? true
+        : statusFilter === 'active'
+        ? j.is_active === 1
+        : j.is_active === 0
+
+    if (matchesSearch && matchesStatus) {
+      groupedJobs[cat].push(j)
+    }
   })
 
   // Summary counts
@@ -226,11 +276,16 @@ export default function MasterDataPage() {
             <Sparkles className="w-3.5 h-3.5" />
             <span>SUPER ADMIN (A1) • SYSTEM CONFIGURATION</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Master Data Configuration
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <span>Master Data Configuration</span>
+            {activeTab === 'jobs' && (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                2-Tier Hierarchy (Sector ➔ Sub-Jobs)
+              </span>
+            )}
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Configure Caste, 2-Tier Occupational Hierarchy, and Political Party dropdowns used across Field Surveys
+            Configure Caste, 2-Tier Occupational Hierarchy (Main Sectors & Sub-Jobs), and Political Party dropdowns
           </p>
         </div>
 
@@ -245,13 +300,17 @@ export default function MasterDataPage() {
           </button>
 
           <button
-            onClick={openCreateModal}
+            onClick={() => openCreateModal()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition shadow-blue-500/20"
           >
             <Plus className="w-4 h-4" />
             <span>
               + Add{' '}
-              {activeTab === 'castes' ? 'Caste' : activeTab === 'jobs' ? 'Occupation' : 'Party'}
+              {activeTab === 'castes'
+                ? 'Caste'
+                : activeTab === 'jobs'
+                ? 'Sub-Job / Occupation'
+                : 'Party'}
             </span>
           </button>
         </div>
@@ -259,6 +318,23 @@ export default function MasterDataPage() {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-6">
+        <button
+          onClick={() => {
+            setActiveTab('jobs')
+            setSearchQuery('')
+            setStatusFilter('all')
+            setSelectedSector('all')
+          }}
+          className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
+            activeTab === 'jobs'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Briefcase className="w-4 h-4" />
+          <span>1. Job / Occupation Master ({jobs.length} Sub-Jobs in {distinctSectors.length} Sectors)</span>
+        </button>
+
         <button
           onClick={() => {
             setActiveTab('castes')
@@ -272,23 +348,7 @@ export default function MasterDataPage() {
           }`}
         >
           <Tag className="w-4 h-4" />
-          <span>1. Caste Master ({castes.length})</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('jobs')
-            setSearchQuery('')
-            setStatusFilter('all')
-          }}
-          className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition ${
-            activeTab === 'jobs'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Briefcase className="w-4 h-4" />
-          <span>2. Job / Occupation Master ({jobs.length})</span>
+          <span>2. Caste Master ({castes.length})</span>
         </button>
 
         <button
@@ -308,176 +368,348 @@ export default function MasterDataPage() {
         </button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeTab}...`}
-            className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+      {/* Filter and Search Toolbar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Search */}
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${activeTab === 'jobs' ? 'occupations / sub-jobs' : activeTab}...`}
+              className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle (for Jobs Tab) */}
+            {activeTab === 'jobs' && (
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+                <button
+                  onClick={() => setJobViewMode('grouped')}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                    jobViewMode === 'grouped'
+                      ? 'bg-white text-blue-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FolderTree className="w-3.5 h-3.5" />
+                  <span>By Sector (குழுவாக)</span>
+                </button>
+                <button
+                  onClick={() => setJobViewMode('table')}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                    jobViewMode === 'table'
+                      ? 'bg-white text-blue-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Table View</span>
+                </button>
+              </div>
+            )}
+
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  statusFilter === 'all'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All ({totalCount})
+              </button>
+              <button
+                onClick={() => setStatusFilter('active')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  statusFilter === 'active'
+                    ? 'bg-white text-emerald-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ✓ Active ({activeCount})
+              </button>
+              <button
+                onClick={() => setStatusFilter('disabled')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  statusFilter === 'disabled'
+                    ? 'bg-white text-amber-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Disabled ({disabledCount})
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg transition ${
-              statusFilter === 'all'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            All ({totalCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('active')}
-            className={`px-3 py-1.5 rounded-lg transition ${
-              statusFilter === 'active'
-                ? 'bg-white text-emerald-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            ✓ Active ({activeCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('disabled')}
-            className={`px-3 py-1.5 rounded-lg transition ${
-              statusFilter === 'disabled'
-                ? 'bg-white text-amber-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Disabled ({disabledCount})
-          </button>
-        </div>
+        {/* Sector Filter Chips (when on Jobs Tab in Table View) */}
+        {activeTab === 'jobs' && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mr-1">
+              Sector Filter:
+            </span>
+            <button
+              onClick={() => setSelectedSector('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                selectedSector === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              All Sectors ({jobs.length})
+            </button>
+            {distinctSectors.map((sec) => {
+              const secCount = jobs.filter((j) => j.category === sec).length
+              return (
+                <button
+                  key={sec}
+                  onClick={() => setSelectedSector(sec)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                    selectedSector === sec
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {sec} ({secCount})
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Master Data Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              <tr>
-                <th className="px-5 py-3.5 w-12 text-center">#</th>
-                <th className="px-5 py-3.5">
-                  {activeTab === 'castes'
-                    ? 'Caste / Community'
-                    : activeTab === 'jobs'
-                    ? 'Occupation Role Title'
-                    : 'Political Party Name'}
-                </th>
-                <th className="px-5 py-3.5">
-                  {activeTab === 'parties' ? 'Party Code' : 'Sector / Category'}
-                </th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-12 text-slate-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-                      <span>Loading master entries...</span>
+      {/* TAB 1: JOBS - GROUPED BY SECTOR VIEW */}
+      {activeTab === 'jobs' && jobViewMode === 'grouped' && (
+        <div className="space-y-6">
+          {Object.entries(groupedJobs).map(([sectorName, subJobs]) => {
+            if (subJobs.length === 0 && searchQuery) return null
+            const activeInSector = subJobs.filter((j) => j.is_active === 1).length
+
+            return (
+              <div
+                key={sectorName}
+                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
+              >
+                {/* Sector Header Card */}
+                <div className="p-4 bg-gradient-to-r from-slate-50 to-blue-50/30 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shadow-blue-500/30">
+                      <FolderTree className="w-4 h-4" />
                     </div>
-                  </td>
-                </tr>
-              ) : filteredList.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-12 text-slate-400">
-                    No matching master records found.
-                  </td>
-                </tr>
-              ) : (
-                filteredList.map((item, idx) => {
-                  const title = item.caste_name || item.job_title || item.party_name || ''
-                  const subtitle = item.category || item.party_code || '—'
-                  const isToggling = togglingId === item.id
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900">{sectorName}</h2>
+                      <p className="text-[11px] text-slate-500">
+                        {subJobs.length} Sub-Jobs configured ({activeInSector} active in field survey)
+                      </p>
+                    </div>
+                  </div>
 
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`hover:bg-slate-50/60 transition ${
-                        item.is_active === 0 ? 'bg-slate-50/40 opacity-75' : ''
-                      }`}
-                    >
-                      <td className="px-5 py-3.5 text-center text-slate-400 font-mono">
-                        {idx + 1}
-                      </td>
+                  <button
+                    onClick={() => openCreateModal(sectorName)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg border border-blue-200 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Add Sub-Job to {sectorName.split('/')[0].trim()}</span>
+                  </button>
+                </div>
 
-                      <td className="px-5 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
-                        {activeTab === 'parties' && (
-                          <span
-                            className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-slate-200"
-                            style={{ backgroundColor: item.color_code || '#2563eb' }}
-                          />
-                        )}
-                        <span className="text-sm">{title}</span>
-                      </td>
+                {/* Sub-Jobs Grid */}
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {subJobs.map((job) => {
+                    const isToggling = togglingId === job.id
 
-                      <td className="px-5 py-3.5 font-medium text-slate-600">
-                        <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold">
-                          {subtitle}
-                        </span>
-                      </td>
+                    return (
+                      <div
+                        key={job.id}
+                        className={`p-3 rounded-xl border transition flex items-center justify-between ${
+                          job.is_active === 1
+                            ? 'bg-white border-slate-200/80 hover:border-blue-300'
+                            : 'bg-slate-50/80 border-slate-200 text-slate-400'
+                        }`}
+                      >
+                        <div className="space-y-1 pr-2">
+                          <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                            <span>{job.job_title}</span>
+                          </div>
 
-                      <td className="px-5 py-3.5">
-                        {item.is_active === 1 ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                            <CheckCircle2 className="w-3 h-3" /> Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600">
-                            <XCircle className="w-3 h-3" /> Disabled
-                          </span>
-                        )}
-                      </td>
+                          <div className="flex items-center gap-1.5">
+                            {job.is_active === 1 ? (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="w-2.5 h-2.5" /> Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                                <XCircle className="w-2.5 h-2.5" /> Disabled
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-                      <td className="px-5 py-3.5 text-right">
-                        <div className="inline-flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button
-                            onClick={() => openEditModal(item)}
-                            title="Edit Item"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition border border-slate-200 bg-white"
+                            onClick={() => openEditModal(job)}
+                            title="Edit Sub-Job"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition border border-slate-200 bg-white"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3 h-3" />
                           </button>
 
                           <button
-                            onClick={() => handleToggle(item.id, item.is_active)}
+                            onClick={() => handleToggle(job.id, job.is_active)}
                             disabled={isToggling}
-                            className={`text-xs font-semibold px-3 py-1 rounded-lg border transition ${
-                              item.is_active === 1
+                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${
+                              job.is_active === 1
                                 ? 'border-amber-200 text-amber-700 hover:bg-amber-50 bg-amber-50/40'
                                 : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 bg-emerald-50/40'
                             }`}
                           >
-                            {isToggling ? '...' : item.is_active === 1 ? 'Disable' : 'Enable'}
+                            {isToggling ? '...' : job.is_active === 1 ? 'Disable' : 'Enable'}
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
+      )}
+
+      {/* TABLE VIEW (FOR JOBS TABLE VIEW, CASTES, AND PARTIES) */}
+      {(activeTab !== 'jobs' || jobViewMode === 'table') && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-5 py-3.5 w-12 text-center">#</th>
+                  <th className="px-5 py-3.5">
+                    {activeTab === 'castes'
+                      ? 'Caste / Community'
+                      : activeTab === 'jobs'
+                      ? 'Sub-Job / Occupation Title'
+                      : 'Political Party Name'}
+                  </th>
+                  <th className="px-5 py-3.5">
+                    {activeTab === 'parties'
+                      ? 'Party Code'
+                      : activeTab === 'jobs'
+                      ? 'Main Sector / Category (முதன்மை பிரிவு)'
+                      : 'Reservation Category'}
+                  </th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-slate-400">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                        <span>Loading master entries...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-slate-400">
+                      No matching master records found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredList.map((item, idx) => {
+                    const title = item.caste_name || item.job_title || item.party_name || ''
+                    const subtitle = item.category || item.party_code || '—'
+                    const isToggling = togglingId === item.id
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-slate-50/60 transition ${
+                          item.is_active === 0 ? 'bg-slate-50/40 opacity-75' : ''
+                        }`}
+                      >
+                        <td className="px-5 py-3.5 text-center text-slate-400 font-mono">
+                          {idx + 1}
+                        </td>
+
+                        <td className="px-5 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
+                          {activeTab === 'parties' && (
+                            <span
+                              className="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-slate-200"
+                              style={{ backgroundColor: item.color_code || '#2563eb' }}
+                            />
+                          )}
+                          <span className="text-sm">{title}</span>
+                        </td>
+
+                        <td className="px-5 py-3.5 font-medium text-slate-600">
+                          <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold">
+                            {subtitle}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-3.5">
+                          {item.is_active === 1 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3" /> Active
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-200 text-slate-600">
+                              <XCircle className="w-3 h-3" /> Disabled
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => openEditModal(item)}
+                              title="Edit Item"
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition border border-slate-200 bg-white"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleToggle(item.id, item.is_active)}
+                              disabled={isToggling}
+                              className={`text-xs font-semibold px-3 py-1 rounded-lg border transition ${
+                                item.is_active === 1
+                                  ? 'border-amber-200 text-amber-700 hover:bg-amber-50 bg-amber-50/40'
+                                  : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 bg-emerald-50/40'
+                              }`}
+                            >
+                              {isToggling ? '...' : item.is_active === 1 ? 'Disable' : 'Enable'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {showAddModal && (
@@ -489,7 +721,7 @@ export default function MasterDataPage() {
                 {activeTab === 'castes'
                   ? 'Caste Community'
                   : activeTab === 'jobs'
-                  ? 'Occupation'
+                  ? 'Sub-Job / Occupation (உட்பிரிவு தொழில்)'
                   : 'Political Party'}
               </h3>
               <button
@@ -515,9 +747,44 @@ export default function MasterDataPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              {/* Step 1 for Jobs: Select Sector */}
+              {activeTab === 'jobs' && (
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">
+                    Step 1: Main Sector / Category (முதன்மை பிரிவு) *
+                  </label>
+                  <input
+                    type="text"
+                    list="job-categories-modal"
+                    required
+                    placeholder="e.g. Agriculture / விவசாயம், Govt Service / அரசு பணி"
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <datalist id="job-categories-modal">
+                    {distinctSectors.map((sec) => (
+                      <option key={sec} value={sec} />
+                    ))}
+                    <option value="Agriculture / விவசாயம்" />
+                    <option value="Govt Service / அரசு பணி" />
+                    <option value="Private Sector / தனியார் துறை" />
+                    <option value="Business & Trade / வணிகம்" />
+                    <option value="Daily Wage / தினக்கூலி" />
+                    <option value="Non-Working & Others / பிற" />
+                  </datalist>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Select from existing sectors or type a new sector title.
+                  </p>
+                </div>
+              )}
+
+              {/* Title / Name */}
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1">
-                  Name / Title *
+                  {activeTab === 'jobs'
+                    ? 'Step 2: Sub-Job / Occupation Title (உட்பிரிவு தொழில் பெயர்) *'
+                    : 'Name / Title *'}
                 </label>
                 <input
                   type="text"
@@ -526,7 +793,7 @@ export default function MasterDataPage() {
                     activeTab === 'castes'
                       ? 'e.g. BC - Vanniyar / வன்னியர்'
                       : activeTab === 'jobs'
-                      ? 'e.g. Electrician / எலக்ட்ரீசியன்'
+                      ? 'e.g. Dairy Farmer / பால் பண்ணை'
                       : 'e.g. DMK / திமுக'
                   }
                   value={formName}
@@ -553,31 +820,6 @@ export default function MasterDataPage() {
                     <option value="SC">SC (Scheduled Caste)</option>
                     <option value="ST">ST (Scheduled Tribe)</option>
                   </select>
-                </div>
-              )}
-
-              {activeTab === 'jobs' && (
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    Main Job Sector / Category (முதன்மை பிரிவு) *
-                  </label>
-                  <input
-                    type="text"
-                    list="job-categories-modal"
-                    required
-                    placeholder="e.g. Agriculture / விவசாயம், Govt Service / அரசு பணி"
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                  <datalist id="job-categories-modal">
-                    <option value="Agriculture / விவசாயம்" />
-                    <option value="Govt Service / அரசு பணி" />
-                    <option value="Private Sector / தனியார் துறை" />
-                    <option value="Business & Trade / வணிகம்" />
-                    <option value="Daily Wage / தினக்கூலி" />
-                    <option value="Non-Working & Others / பிற" />
-                  </datalist>
                 </div>
               )}
 
@@ -631,7 +873,7 @@ export default function MasterDataPage() {
                   disabled={saving}
                   className="px-5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-semibold shadow-sm shadow-blue-500/20 disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : editingItem ? 'Update Option' : 'Save Option'}
+                  {saving ? 'Saving...' : editingItem ? 'Update Sub-Job' : 'Save Sub-Job'}
                 </button>
               </div>
             </form>
