@@ -1,0 +1,17 @@
+{
+  "name": "vms-sync-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Central ingestion API that applies SQLite outbox events to MySQL — the only thing that ever talks to MySQL.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "dev": "node --env-file-if-exists=.env --watch src/index.js"
+  },
+  "engines": { "node": ">=22.5.0" },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mysql2": "^3.11.0"
+  }
+}
