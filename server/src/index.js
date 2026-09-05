@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { db, migrate } from './lib/db.js';
+import { migrateOutbox } from './lib/outbox.js';
+import { startSyncWorker } from './lib/syncWorker.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import masterRoutes from './routes/masters.js';
@@ -13,11 +15,13 @@ import voterRoutes from './routes/voters.js';
 import dashboardRoutes from './routes/dashboard.js';
 import boothRoutes from './routes/booths.js';
 import reportRoutes from './routes/reports.js';
+import syncStatusRoutes from './routes/sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 4000;
 
 migrate();
+migrateOutbox();
 
 const app = express();
 app.disable('x-powered-by');
@@ -65,6 +69,7 @@ app.use('/api/voters', voterRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/booths', boothRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/sync', syncStatusRoutes);
 
 app.use('/api', (req, res) =>
   res.status(404).json({ error: `No API route for ${req.method} ${req.originalUrl}` })
@@ -94,4 +99,12 @@ app.listen(PORT, () => {
   console.log(`  constituency: AC ${ac?.ac_no ?? '?'} ${ac?.ac_name_ta ?? ''}`);
   console.log(`  live electors: ${c.toLocaleString()}`);
   console.log(`  serving web:   ${fs.existsSync(webDist) ? 'yes (web/dist)' : 'no (run vite dev)'}\n`);
+});
+
+startSyncWorker({
+  apiUrl: (process.env.SYNC_API_URL || '').replace(/\/+$/, ''),
+  apiKey: process.env.SYNC_API_KEY || '',
+  batchSize: Number(process.env.SYNC_BATCH_SIZE) || 100,
+  intervalMs: Number(process.env.SYNC_INTERVAL_MS) || 10000,
+  timeoutMs: Number(process.env.SYNC_TIMEOUT_MS) || 15000,
 });

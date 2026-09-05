@@ -2,13 +2,13 @@
   "name": "voter-survey-management-system",
   "version": "1.0.0",
   "private": true,
-  "description": "Voter Survey & Management System — 3-tier RBAC portal for electoral verification, field survey and live analytics",
+  "description": "Voter Survey & Management System \u2014 3-tier RBAC portal for electoral verification, field survey and live analytics",
   "engines": {
     "node": ">=22.5.0"
   },
   "scripts": {
-    "postinstall": "npm --prefix server install && npm --prefix web install",
-    "build": "npm --prefix server install && npm --prefix web install && node server/scripts/sync-db.mjs && npm --prefix web run build",
+    "postinstall": "npm --prefix server install && npm --prefix web install --include=dev",
+    "build": "npm --prefix server install && npm --prefix web install --include=dev && node server/scripts/sync-db.mjs && npm --prefix web run build",
     "start": "node server/scripts/sync-db.mjs && node server/src/index.js",
     "setup": "npm --prefix server install && npm --prefix web install && npm run db:build",
     "db:build": "npm --prefix server run import && npm --prefix server run seed",

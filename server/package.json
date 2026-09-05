@@ -6,8 +6,8 @@
   "description": "Voter Survey & Management System - REST API",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "dev": "node --env-file-if-exists=.env --watch src/index.js",
     "import": "node scripts/import-data.mjs",
     "seed": "node scripts/seed.mjs",
     "reset": "node scripts/import-data.mjs --fresh && node scripts/seed.mjs",
