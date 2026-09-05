@@ -1,0 +1,184 @@
+import { DatabaseSync } from 'node:sqlite';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export const DATA_DIR = path.resolve(__dirname, '../../../data');
+export const DB_PATH = process.env.VMS_DB_PATH || path.join(DATA_DIR, 'vms.db');
+
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+export const db = new DatabaseSync(DB_PATH);
+
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA foreign_keys = ON');
+db.exec('PRAGMA synchronous = NORMAL');
+db.exec('PRAGMA cache_size = -32000');   // 32 MB page cache
+db.exec('PRAGMA temp_store = MEMORY');
+
+/**
+ * Schema for the Voter Management & Field Survey System.
+ *
+ * Jurisdiction is anchored on the polling part (booth), which is how the
+ * Election Commission actually partitions an electorate: a supervisor owns a
+ * set of booths, an agent owns one. Local body (panchayat/town) is an attribute
+ * of the booth rather than a level of the permission tree, so a booth is never
+ * reachable through two different paths.
+ */
+export function migrate() {
+  db.exec(`
+    -- ===================== POLLING PARTS (booths) =====================
+    CREATE TABLE IF NOT EXISTS polling_parts (
+      part_no             INTEGER PRIMARY KEY,
+      ac_no               TEXT NOT NULL,
+      ac_name_ta          TEXT,
+      pc_no               TEXT,
+      pc_name_ta          TEXT,
+      local_body_name_ta  TEXT NOT NULL,
+      local_body_type     TEXT NOT NULL CHECK (local_body_type IN ('TOWN_PANCHAYAT','VILLAGE_PANCHAYAT')),
+      main_village_ta     TEXT,
+      ward_ta             TEXT,
+      taluk_ta            TEXT,
+      district_ta         TEXT,
+      pincode             TEXT,
+      section_details_ta  TEXT,
+      revision_year       TEXT
+    );
+
+    -- ===================== VOTERS MASTER (electoral roll) =====================
+    CREATE TABLE IF NOT EXISTS voters_master (
+      epic_id            TEXT PRIMARY KEY,
+      voter_sno          INTEGER,
+      part_no            INTEGER NOT NULL REFERENCES polling_parts(part_no) ON DELETE CASCADE,
+      name_ta            TEXT NOT NULL,
+      relation_type_ta   TEXT,
+      relative_name_ta   TEXT,
+      door_no            TEXT,
+      age                INTEGER,
+      gender             TEXT,
+      section_title_ta   TEXT,
+      roll_type_ta       TEXT,
+      is_supplement      INTEGER DEFAULT 0,
+      is_deleted         INTEGER DEFAULT 0,
+      deletion_reason    TEXT,
+      page_number        INTEGER
+    );
+
+    -- ===================== USERS & AUTH =====================
+    CREATE TABLE IF NOT EXISTS users (
+      id             TEXT PRIMARY KEY,
+      mobile_number  TEXT NOT NULL UNIQUE,
+      password_hash  TEXT NOT NULL,
+      role           TEXT NOT NULL CHECK (role IN ('A1_SUPER_ADMIN','A2_SUPERVISOR','A3_FIELD_AGENT')),
+      epic_id        TEXT,
+      full_name      TEXT,
+      is_active      INTEGER DEFAULT 1,
+      created_by     TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at     TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      last_login_at  TEXT
+    );
+
+    -- Booth-level scope. A1 holds no rows here (global by role).
+    CREATE TABLE IF NOT EXISTS user_jurisdictions (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id  TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      part_no  INTEGER NOT NULL REFERENCES polling_parts(part_no) ON DELETE CASCADE,
+      UNIQUE (user_id, part_no)
+    );
+
+    -- ===================== MASTER DATA =====================
+    -- Reservation category drives community-wise reporting.
+    CREATE TABLE IF NOT EXISTS caste_master (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL UNIQUE,
+      name_ta    TEXT,
+      category   TEXT NOT NULL DEFAULT 'BC'
+                 CHECK (category IN ('OC','BC','BCM','MBC','SC','ST','OTHER')),
+      is_active  INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    -- Two tiers in one table: "category" is the sector, "name" the sub-job.
+    CREATE TABLE IF NOT EXISTS job_master (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      category    TEXT NOT NULL,
+      category_ta TEXT,
+      name        TEXT NOT NULL,
+      name_ta     TEXT,
+      is_active   INTEGER DEFAULT 1,
+      created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      UNIQUE (category, name)
+    );
+
+    -- symbol_img holds a self-contained Base64 data URL, so emblems render with
+    -- no CDN, no file server and no broken-image states.
+    CREATE TABLE IF NOT EXISTS party_master (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL UNIQUE,
+      name_ta     TEXT,
+      party_code  TEXT NOT NULL UNIQUE,
+      color_code  TEXT DEFAULT '#64748b',
+      symbol_img  TEXT,
+      is_active   INTEGER DEFAULT 1,
+      created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    -- ===================== SURVEY RECORDS =====================
+    -- One survey per elector: epic_id is the primary key, so a re-survey is an
+    -- UPSERT rather than a duplicate row.
+    CREATE TABLE IF NOT EXISTS voter_surveys (
+      epic_id                  TEXT PRIMARY KEY
+                               REFERENCES voters_master(epic_id) ON DELETE CASCADE,
+      corrected_name_ta        TEXT,
+      corrected_relative_name_ta TEXT,
+      phone_number             TEXT NOT NULL,
+      caste_id                 INTEGER REFERENCES caste_master(id),
+      job_id                   INTEGER REFERENCES job_master(id),
+      party_id                 INTEGER REFERENCES party_master(id),
+      other_job_text           TEXT,
+      remarks                  TEXT,
+      surveyed_by              TEXT REFERENCES users(id) ON DELETE SET NULL,
+      surveyed_at              TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updated_at               TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    TEXT,
+      action     TEXT NOT NULL,
+      entity     TEXT,
+      entity_id  TEXT,
+      detail     TEXT,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    -- ===================== INDEXES =====================
+    CREATE INDEX IF NOT EXISTS idx_vm_part_no   ON voters_master(part_no);
+    CREATE INDEX IF NOT EXISTS idx_vm_part_live ON voters_master(part_no, is_deleted);
+    CREATE INDEX IF NOT EXISTS idx_vm_name      ON voters_master(name_ta);
+    CREATE INDEX IF NOT EXISTS idx_vm_relative  ON voters_master(relative_name_ta);
+    CREATE INDEX IF NOT EXISTS idx_vm_door      ON voters_master(door_no);
+    CREATE INDEX IF NOT EXISTS idx_vm_gender    ON voters_master(gender);
+    CREATE INDEX IF NOT EXISTS idx_vm_sno       ON voters_master(part_no, voter_sno);
+    CREATE INDEX IF NOT EXISTS idx_pp_local     ON polling_parts(local_body_name_ta);
+    CREATE INDEX IF NOT EXISTS idx_vs_party     ON voter_surveys(party_id);
+    CREATE INDEX IF NOT EXISTS idx_vs_agent     ON voter_surveys(surveyed_by);
+    CREATE INDEX IF NOT EXISTS idx_vs_at        ON voter_surveys(surveyed_at);
+    CREATE INDEX IF NOT EXISTS idx_uj_user      ON user_jurisdictions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_uj_part      ON user_jurisdictions(part_no);
+    CREATE INDEX IF NOT EXISTS idx_audit_user   ON audit_log(user_id, created_at);
+  `);
+}
+
+/** Refreshes planner statistics so scoped queries pick the right index. */
+export function analyze() {
+  try {
+    db.exec('ANALYZE');
+  } catch {
+    /* statistics are an optimisation, never a hard requirement */
+  }
+}
+
+export const nowIso = () => new Date().toISOString();
+export const uuid = () => crypto.randomUUID();

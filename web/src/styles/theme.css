@@ -1,0 +1,170 @@
+/* ============================================================================
+   Voter Survey & Management System — design tokens
+   A single source of truth for colour, type, spacing, elevation and motion.
+   Light is the default; dark is applied via [data-theme="dark"] on <html>.
+   ========================================================================== */
+
+:root {
+  /* ---- brand ------------------------------------------------------------ */
+  --brand-50:  #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --brand-800: #1e40af;
+  --brand-900: #1e3a8a;
+
+  /* ---- semantic --------------------------------------------------------- */
+  --ok-50:   #ecfdf5;  --ok-100: #d1fae5;  --ok-500: #10b981;  --ok-600: #059669;  --ok-700: #047857;
+  --warn-50: #fffbeb;  --warn-100:#fef3c7;  --warn-500:#f59e0b;  --warn-600:#d97706;  --warn-700:#b45309;
+  --bad-50:  #fef2f2;  --bad-100: #fee2e2;  --bad-500: #ef4444;  --bad-600: #dc2626;  --bad-700: #b91c1c;
+  --info-50: #f0f9ff;  --info-100:#e0f2fe;  --info-500:#0ea5e9;  --info-600:#0284c7;
+
+  /* categorical series for charts — distinguishable in both themes */
+  --c1: #2563eb;  --c2: #059669;  --c3: #d97706;  --c4: #7c3aed;
+  --c5: #db2777;  --c6: #0891b2;  --c7: #ca8a04;  --c8: #4f46e5;
+
+  /* ---- surfaces (light) ------------------------------------------------- */
+  --bg:          #f6f7fb;
+  --bg-subtle:   #eef1f7;
+  --surface:     #ffffff;
+  --surface-2:   #fbfcfe;
+  --surface-3:   #f3f5f9;
+  --overlay:     rgba(15, 23, 42, 0.45);
+
+  --border:        #e3e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus:  var(--brand-500);
+
+  --text:        #0f172a;
+  --text-muted:  #5b6b84;
+  --text-subtle: #8494ab;
+  --text-invert: #ffffff;
+
+  --sidebar-bg:      #101b33;
+  --sidebar-bg-2:    #0b1426;
+  --sidebar-text:    #b9c6dd;
+  --sidebar-active:  #ffffff;
+  --sidebar-hover:   rgba(255, 255, 255, 0.07);
+  --sidebar-border:  rgba(255, 255, 255, 0.09);
+
+  /* ---- type ------------------------------------------------------------- */
+  --font: 'Inter', 'Noto Sans Tamil', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-tamil: 'Noto Sans Tamil', 'Inter', sans-serif;
+  --font-mono: 'SFMono-Regular', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --fs-xs: 0.75rem;    --fs-sm: 0.8125rem;  --fs-base: 0.875rem;
+  --fs-md: 0.9375rem;  --fs-lg: 1.0625rem;  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;    --fs-3xl: 1.875rem;  --fs-4xl: 2.25rem;
+
+  /* ---- space / radius / elevation --------------------------------------- */
+  --sp-1: 4px;  --sp-2: 8px;   --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px;  --sp-8: 32px;  --sp-10: 40px;  --sp-12: 48px;
+
+  --r-sm: 6px;  --r-md: 10px;  --r-lg: 14px;  --r-xl: 18px;  --r-full: 999px;
+
+  --sh-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sh-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --sh-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --sh-lg: 0 12px 28px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.05);
+  --sh-xl: 0 24px 48px rgba(15, 23, 42, 0.18);
+  --sh-focus: 0 0 0 3px rgba(37, 99, 235, 0.18);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 160ms;
+
+  --sidebar-w: 258px;
+  --header-h: 62px;
+}
+
+[data-theme='dark'] {
+  --bg:        #0a0f1c;
+  --bg-subtle: #0e1526;
+  --surface:   #131c30;
+  --surface-2: #17203a;
+  --surface-3: #1c2740;
+  --overlay:   rgba(0, 0, 0, 0.65);
+
+  --border:        #24304d;
+  --border-strong: #35446a;
+
+  --text:        #eaf0fb;
+  --text-muted:  #97a6c2;
+  --text-subtle: #6e7f9e;
+
+  --sidebar-bg:     #080d1a;
+  --sidebar-bg-2:   #050912;
+  --sidebar-text:   #93a3c0;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+
+  --brand-50:  #172554;
+  --brand-100: #1e3a8a;
+  --ok-50:   #052e21;  --ok-100: #064e3b;
+  --warn-50: #3a2a06;  --warn-100:#5a3f08;
+  --bad-50:  #3f1417;  --bad-100: #5c1d21;
+  --info-50: #082f49;  --info-100:#0c4a6e;
+
+  --c1: #60a5fa;  --c2: #34d399;  --c3: #fbbf24;  --c4: #a78bfa;
+  --c5: #f472b6;  --c6: #22d3ee;  --c7: #fde047;  --c8: #818cf8;
+
+  --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --sh-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --sh-lg: 0 12px 28px rgba(0, 0, 0, 0.6);
+  --sh-xl: 0 24px 48px rgba(0, 0, 0, 0.7);
+  --sh-focus: 0 0 0 3px rgba(96, 165, 250, 0.28);
+}
+
+/* ============================== reset ==================================== */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5 { margin: 0; font-weight: 650; letter-spacing: -0.015em; line-height: 1.25; }
+p { margin: 0; }
+a { color: var(--brand-600); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+}
+
+/* Tamil script needs a slightly larger optical size to stay readable */
+.ta, [lang='ta'] { font-family: var(--font-tamil); font-size: 1.02em; line-height: 1.7; }
+
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

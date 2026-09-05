@@ -1,46 +1,21 @@
 {
-  "name": "vms-webapp",
+  "name": "voter-survey-management-system",
   "version": "1.0.0",
   "private": true,
+  "description": "Voter Survey & Management System — 3-tier RBAC portal for electoral verification, field survey and live analytics",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
-    "dev": "next dev",
-    "prebuild": "node scripts/sync-db.js",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@tanstack/react-table": "^9.2.4",
-    "adm-zip": "^0.6.0",
-    "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^13.0.3",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "drizzle-orm": "^0.45.2",
-    "idb": "^8.0.3",
-    "jose": "^5.10.0",
-    "lucide-react": "^0.475.0",
-    "next": "^14.2.24",
-    "next-themes": "^0.4.6",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "recharts": "^3.10.1",
-    "tailwind-merge": "^3.6.0",
-    "xlsx": "^0.18.5",
-    "zod": "^4.5.4"
-  },
-  "devDependencies": {
-    "@swc/helpers": "^0.5.23",
-    "@types/adm-zip": "^0.5.8",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^22.13.4",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
-    "autoprefixer": "^10.4.20",
-    "caniuse-lite": "^1.0.30001700",
-    "drizzle-kit": "^0.31.10",
-    "postcss": "^8.5.2",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "postinstall": "npm --prefix server install && npm --prefix web install",
+    "build": "npm --prefix server install && npm --prefix web install && node server/scripts/sync-db.mjs && npm --prefix web run build",
+    "start": "node server/scripts/sync-db.mjs && node server/src/index.js",
+    "setup": "npm --prefix server install && npm --prefix web install && npm run db:build",
+    "db:build": "npm --prefix server run import && npm --prefix server run seed",
+    "db:reset": "npm --prefix server run reset",
+    "dev:api": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "test": "npm --prefix server run test:api",
+    "typecheck": "npm --prefix web run typecheck"
   }
 }
