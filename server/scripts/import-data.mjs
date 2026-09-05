@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { db, migrate, analyze, DATA_DIR } from '../src/lib/db.js';
+import { migrateOutbox } from '../src/lib/outbox.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -110,6 +111,14 @@ async function main() {
     dropRollTables();
   }
   migrate();
+  // Registers the sync-outbox triggers (and the vms_uuid() function they call)
+  // on THIS process's connection. Without this, a fresh `voters_master`/
+  // `polling_parts` import would proceed fine (those two tables aren't synced),
+  // but if the outbox trigger schema already exists from a previous server run
+  // and this script later touches a synced table, it would fail with
+  // "no such function: vms_uuid" — registered functions are per-connection,
+  // not persisted in the database file the way triggers are.
+  migrateOutbox();
 
   const already = db.prepare('SELECT COUNT(*) AS c FROM voters_master').get().c;
   if (already > 0 && !FRESH) {

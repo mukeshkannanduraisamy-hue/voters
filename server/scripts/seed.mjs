@@ -5,12 +5,14 @@
  * --force resets the demo passwords and re-applies their booth jurisdictions.
  */
 import { db, migrate, uuid } from '../src/lib/db.js';
+import { migrateOutbox } from '../src/lib/outbox.js';
 import { hashPassword, ROLES } from '../src/lib/auth.js';
 import { CASTES, JOB_SECTORS, PARTIES } from './seed-data.mjs';
 
 const FORCE = process.argv.includes('--force');
 
 migrate();
+migrateOutbox(); // registers vms_uuid() for this process — see import-data.mjs for why
 
 /* ------------------------------- masters -------------------------------- */
 function seedCastes() {

@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,18 @@ db.exec('PRAGMA foreign_keys = ON');
 db.exec('PRAGMA synchronous = NORMAL');
 db.exec('PRAGMA cache_size = -32000');   // 32 MB page cache
 db.exec('PRAGMA temp_store = MEMORY');
+
+// Registered here — not only in outbox.js's migrateOutbox() — because a SQL
+// function registration lives on the connection, in memory, and is never
+// persisted the way a trigger is. Any process that opens this database file
+// (the server, `npm run seed`, `npm run import`, a future one-off script)
+// gets a fresh connection with no functions registered yet; if the sync
+// outbox's trigger schema already exists (created by an earlier server run)
+// and that process writes to a synced table without this, every such write
+// fails with "no such function: vms_uuid". Registering it unconditionally
+// right here means that can never happen, regardless of what the caller
+// remembers to call.
+db.function('vms_uuid', () => crypto.randomUUID());
 
 /**
  * Schema for the Voter Management & Field Survey System.

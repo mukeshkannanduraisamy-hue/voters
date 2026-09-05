@@ -16,6 +16,11 @@
     "dev:api": "npm --prefix server run dev",
     "dev:web": "npm --prefix web run dev",
     "test": "npm --prefix server run test:api",
-    "typecheck": "npm --prefix web run typecheck"
+    "typecheck": "npm --prefix web run typecheck",
+
+    "sync:install": "npm --prefix sync-server install",
+    "sync:start": "npm --prefix sync-server start",
+    "sync:dev": "npm --prefix sync-server run dev",
+    "sync:test": "npm --prefix sync-server run test:apply"
   }
 }

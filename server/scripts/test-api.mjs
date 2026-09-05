@@ -522,6 +522,26 @@ section('Error handling');
   check('unknown API route → JSON 404', nf.status === 404 && !!nf.data.error);
 }
 
+// ───────────────────────────────── sync outbox status
+section('Sync outbox status (transactional outbox)');
+{
+  const s1 = await api('GET', '/api/sync/status', { token: T1 });
+  check('A1 reads sync status', s1.status === 200 && typeof s1.data.pending === 'number', JSON.stringify(s1.data));
+  check('sync status reports enabled/apiUrl', 'enabled' in s1.data && 'apiUrl' in s1.data);
+
+  check('A2 cannot read sync status (403)', (await api('GET', '/api/sync/status', { token: T2 })).status === 403);
+  check('A3 cannot read sync status (403)', (await api('GET', '/api/sync/status', { token: T3 })).status === 403);
+
+  // A write to any synced table (caste_master here) must produce a pending
+  // outbox row — proof the trigger fired in the same transaction as the write.
+  const before = (await api('GET', '/api/sync/status', { token: T1 })).data;
+  const created = await api('POST', '/api/masters/caste', { token: T1, body: { name: 'ZZ Outbox Probe ' + Date.now(), category: 'OTHER' } });
+  const after = await api('GET', '/api/sync/status', { token: T1 });
+  check('a synced-table write increments outbox counts', (after.data.pending + after.data.synced) > (before.pending + before.synced));
+
+  if (created.data?.id) await api('DELETE', `/api/masters/caste/${created.data.id}`, { token: T1 });
+}
+
 // cleanup
 if (newCasteId) await api('DELETE', `/api/masters/caste/${newCasteId}`, { token: T1 });
 if (newJobId) await api('DELETE', `/api/masters/job/${newJobId}`, { token: T1 });

@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { db } from './db.js';
 import { SYNC_TABLES } from '../../../shared/sync-tables.mjs';
 
@@ -29,14 +28,8 @@ export function migrateOutbox() {
     CREATE INDEX IF NOT EXISTS idx_outbox_table   ON sync_outbox(table_name, record_pk);
   `);
 
-  // A SQL-callable UUID generator so every trigger below can mint an event_id
-  // without any application code in the write path. Re-registering on every
-  // call (e.g. hot-reload in dev) throws "already registered" — harmless.
-  try {
-    db.function('vms_uuid', () => crypto.randomUUID());
-  } catch {
-    /* already registered on this connection */
-  }
+  // vms_uuid() (called by every trigger below) is registered unconditionally
+  // in db.js the moment this connection is opened — see the comment there.
 
   for (const [table, { pk, columns }] of Object.entries(SYNC_TABLES)) {
     const newCols = columns.map((c) => `'${c}', NEW.${c}`).join(', ');
