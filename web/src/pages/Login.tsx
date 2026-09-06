@@ -3,14 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth, HOME_FOR } from '../lib/auth';
 import { ApiError, api } from '../lib/api';
 import type { HealthInfo } from '../lib/types';
-import { Alert, Button, Field, Input, PhoneInput, fmt } from '../components/ui';
+import { Alert, Button, Field, Input, PhoneInput } from '../components/ui';
 import { Icon } from '../components/icons';
-
-const DEMO = [
-  { role: 'A1 Super Admin', mobile: '9876543210', password: 'admin123', note: 'Global — all 318 booths' },
-  { role: 'A2 Supervisor', mobile: '9840123456', password: 'super123', note: 'Assigned booths only' },
-  { role: 'A3 Field Agent', mobile: '9845012345', password: 'agent123', note: 'Mobile field survey' },
-];
 
 export default function Login() {
   const { login, user } = useAuth();
@@ -99,21 +93,6 @@ export default function Login() {
             </div>
           </div>
         </div>
-
-        <div className="login-hero-foot">
-          <div className="login-hero-stat">
-            <strong>{health ? fmt(health.counts.liveVoters) : '—'}</strong>
-            <span>Electors</span>
-          </div>
-          <div className="login-hero-stat">
-            <strong>{health ? fmt(health.counts.booths) : '—'}</strong>
-            <span>Booths</span>
-          </div>
-          <div className="login-hero-stat">
-            <strong>{health ? fmt(health.counts.localBodies) : '—'}</strong>
-            <span>Local Bodies</span>
-          </div>
-        </div>
       </section>
 
       <section className="login-panel">
@@ -174,24 +153,6 @@ export default function Login() {
             <Button type="submit" variant="primary" size="lg" block loading={busy} icon="lock">
               {busy ? 'Signing in…' : 'Sign In to Portal (உள்நுழைக)'}
             </Button>
-          </div>
-
-          <div className="demo-box">
-            <div className="demo-head">Quick test credentials — click to fill</div>
-            {DEMO.map((d) => (
-              <button
-                key={d.mobile}
-                type="button"
-                className="demo-row"
-                onClick={() => { setMobile(d.mobile); setPassword(d.password); setError(''); }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div className="demo-row-name">{d.role}</div>
-                  <div className="demo-row-cred mono">{d.mobile} / {d.password}</div>
-                </div>
-                <span className="use">USE</span>
-              </button>
-            ))}
           </div>
         </form>
       </section>
