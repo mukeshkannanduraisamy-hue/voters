@@ -624,7 +624,7 @@ section('Excel report export');
   check('export is served as an attachment', /attachment; filename="vms-survey-report\.xlsx"/.test(res.headers.get('content-disposition') ?? ''));
 
   const s2 = await api('GET', '/api/reports/export', { token: T2, raw: true });
-  check('A2 can export its own scope', s2.status === 200);
+  check('A2 cannot export (403)', s2.status === 403);
   check('A3 cannot export (403)', (await api('GET', '/api/reports/export', { token: T3 })).status === 403);
 }
 

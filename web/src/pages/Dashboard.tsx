@@ -96,9 +96,11 @@ export default function Dashboard() {
         actions={
           <>
             <Button icon="refresh" loading={refreshing} onClick={() => void load(true)}>Refresh</Button>
-            <Button variant="primary" icon="download" loading={exporting} onClick={() => void doExport()}>
-              Export Excel
-            </Button>
+            {user?.role === 'A1_SUPER_ADMIN' && (
+              <Button variant="primary" icon="download" loading={exporting} onClick={() => void doExport()}>
+                Export Excel
+              </Button>
+            )}
           </>
         }
       />

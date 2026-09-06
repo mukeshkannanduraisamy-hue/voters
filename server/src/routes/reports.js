@@ -13,7 +13,7 @@ router.use(authenticate);
  * Column headers are Tamil, matching the field the data actually came from, so
  * the sheet is readable by the constituency staff who use it.
  */
-router.get('/export', requireRole(ROLES.A1, ROLES.A2), async (req, res) => {
+router.get('/export', requireRole(ROLES.A1), async (req, res) => {
   const LIMIT = 60000; // guards against an accidental full-roll export exhausting memory
   const f = buildFilter(req);
 

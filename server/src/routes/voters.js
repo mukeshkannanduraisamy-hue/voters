@@ -2,6 +2,7 @@ import express from 'express';
 import { db, nowIso } from '../lib/db.js';
 import { authenticate, requireRole, audit, ROLES } from '../lib/auth.js';
 import { buildPartFilter } from '../lib/scope.js';
+import { invalidateDashboardCache } from './dashboard.js';
 
 const router = express.Router();
 router.use(authenticate);
@@ -408,6 +409,7 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, r
   }
 
   audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id, null);
+  invalidateDashboardCache();
 
   const fresh = db.prepare(`SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE v.epic_id = ?`).get(voter.epic_id);
   res.json({
@@ -418,12 +420,23 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, r
   });
 });
 
+/** DELETE /api/voters/surveys/all — A1 only, clears all survey records */
+router.delete('/surveys/all', requireRole(ROLES.A1), (req, res) => {
+  db.exec('DELETE FROM survey_field_values');
+  const info = db.prepare('DELETE FROM voter_surveys').run();
+  db.exec("DELETE FROM sync_outbox WHERE table_name = 'voter_surveys' OR table_name = 'survey_field_values'");
+  audit(req.user.id, 'ALL_SURVEYS_CLEARED', 'voter_surveys', 'all', `${info.changes} surveys deleted`);
+  invalidateDashboardCache();
+  res.json({ ok: true, deleted: info.changes });
+});
+
 /** DELETE /api/voters/survey/:epic — A1 only, to undo a bad record */
 router.delete('/survey/:epic', requireRole(ROLES.A1), (req, res) => {
   const epic = String(req.params.epic).trim().toUpperCase();
   const info = db.prepare('DELETE FROM voter_surveys WHERE UPPER(epic_id) = ?').run(epic);
   if (!info.changes) return res.status(404).json({ error: 'No survey record for this EPIC' });
   audit(req.user.id, 'SURVEY_DELETED', 'voter_survey', epic, null);
+  invalidateDashboardCache();
   res.json({ ok: true });
 });
 

@@ -48,7 +48,7 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
   const [sortBy, setSortBy] = useState('voter_sno');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const canExport = user?.role !== 'A3_FIELD_AGENT';
+  const canExport = user?.role === 'A1_SUPER_ADMIN';
   const canEditDirectly = user?.role === 'A1_SUPER_ADMIN' || user?.role === 'A2_SUPERVISOR';
   const isAgent = user?.role === 'A3_FIELD_AGENT';
 
