@@ -231,6 +231,32 @@ export function migrate() {
   ensureColumn('users', 'last_seen_at', 'TEXT');
   ensureColumn('voter_surveys', 'education_id', 'INTEGER REFERENCES education_master(id)');
   ensureColumn('voter_surveys', 'last_updated_by', 'TEXT REFERENCES users(id) ON DELETE SET NULL');
+  ensureEducationDefaults();
+}
+
+const DEFAULT_EDUCATION = [
+  ['Illiterate', 'எழுத்தறிவு இல்லாதவர்'],
+  ['Primary (1st–5th)', 'தொடக்கக் கல்வி (1-5 ஆம் வகுப்பு)'],
+  ['Middle School (6th–8th)', 'நடுநிலைக் கல்வி (6-8 ஆம் வகுப்பு)'],
+  ['10th / SSLC', '10 ஆம் வகுப்பு / எஸ்.எஸ்.எல்.சி'],
+  ['12th / HSC', '12 ஆம் வகுப்பு / உயர்நிலைக் கல்வி'],
+  ['Diploma / ITI', 'பட்டயம் / ஐ.டி.ஐ'],
+  ['Graduate (BA/BSc/BCom)', 'பட்டதாரி (பி.ஏ/பி.எஸ்.சி/பி.காம்)'],
+  ['Engineering (BE/BTech)', 'பொறியியல் பட்டதாரி (பி.இ/பி.டெக்)'],
+  ['Postgraduate (MA/MSc/MTech)', 'முதுகலைப் பட்டதாரி (எம்.ஏ/எம்.எஸ்.சி/எம்.டெக்)'],
+  ['Professional (MBBS/LLB/MBA/CA)', 'தொழில்முறைப் படிப்பு (எம்.பி.பி.எஸ்/எல்.எல்.பி/எம்.பி.ஏ/சி.ஏ)'],
+  ['PhD / Doctorate', 'முனைவர் பட்டம் (பிஎச்.டி)'],
+  ['Not Disclosed', 'தெரிவிக்கவில்லை'],
+];
+
+function ensureEducationDefaults() {
+  const c = db.prepare('SELECT COUNT(*) c FROM education_master').get().c;
+  if (c === 0) {
+    const insert = db.prepare('INSERT INTO education_master (name, name_ta, is_active) VALUES (?, ?, 1) ON CONFLICT(name) DO NOTHING');
+    for (const [name, nameTa] of DEFAULT_EDUCATION) {
+      insert.run(name, nameTa);
+    }
+  }
 }
 
 function ensureColumn(table, column, definition) {
