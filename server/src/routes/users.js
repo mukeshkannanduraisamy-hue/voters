@@ -61,8 +61,7 @@ router.get('/list', requireRole(ROLES.A1, ROLES.A2), (req, res) => {
     where.push(`u.id IN (${visible.map(() => '?').join(',')})`);
     params.push(...visible);
   } else {
-    where.push('u.id <> ?'); // A1 does not list itself among managed users
-    params.push(req.user.id);
+    where.push("u.role <> 'A1_SUPER_ADMIN'"); // A1 manages supervisors and field agents
   }
 
   if (q) {

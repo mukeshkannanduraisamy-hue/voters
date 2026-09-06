@@ -122,6 +122,11 @@ const a1 = upsertUser({
   epic: pickEpic(0).epic_id, name: 'Super Admin',
 });
 
+const a1_mukesh = upsertUser({
+  mobile: '8144928022', password: 'admin123', role: ROLES.A1,
+  epic: pickEpic(4).epic_id, name: 'Super Admin',
+});
+
 // The supervisor gets the first ten booths; each agent takes a slice of those,
 // so the A2 genuinely supervises the A3s beneath them.
 const firstTen = db.prepare('SELECT part_no FROM polling_parts ORDER BY part_no LIMIT 10').all().map((r) => r.part_no);

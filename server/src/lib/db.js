@@ -232,6 +232,20 @@ export function migrate() {
   ensureColumn('voter_surveys', 'education_id', 'INTEGER REFERENCES education_master(id)');
   ensureColumn('voter_surveys', 'last_updated_by', 'TEXT REFERENCES users(id) ON DELETE SET NULL');
   ensureEducationDefaults();
+  ensureSuperAdmin('8144928022', 'admin123', 'Super Admin');
+}
+
+function ensureSuperAdmin(mobile, password, name) {
+  const existing = db.prepare('SELECT id FROM users WHERE mobile_number = ?').get(mobile);
+  if (!existing) {
+    const epicRow = db.prepare('SELECT epic_id FROM voters_master WHERE is_deleted = 0 ORDER BY part_no, voter_sno LIMIT 1 OFFSET 4').get();
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync(String(password), salt, 64).toString('hex');
+    const hash = 'scrypt$' + salt + '$' + derived;
+    db.prepare(
+      'INSERT INTO users (id, mobile_number, password_hash, role, epic_id, full_name, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+    ).run(crypto.randomUUID(), mobile, hash, 'A1_SUPER_ADMIN', epicRow ? epicRow.epic_id : null, name);
+  }
 }
 
 const DEFAULT_EDUCATION = [
