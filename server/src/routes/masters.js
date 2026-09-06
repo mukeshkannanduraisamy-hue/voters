@@ -42,6 +42,9 @@ router.get('/dropdowns', (req, res) => {
   const parties = db
     .prepare('SELECT id, name, name_ta, party_code, color_code, symbol_img FROM party_master WHERE is_active = 1 ORDER BY id')
     .all();
+  const educationLevels = db
+    .prepare('SELECT id, name, name_ta FROM education_master WHERE is_active = 1 ORDER BY id')
+    .all();
 
   const sectors = [];
   const byCategory = new Map();
@@ -54,7 +57,7 @@ router.get('/dropdowns', (req, res) => {
     byCategory.get(j.category).jobs.push({ id: j.id, name: j.name, name_ta: j.name_ta });
   }
 
-  res.json({ castes, jobs, sectors, parties });
+  res.json({ castes, jobs, sectors, parties, educationLevels });
 });
 
 /* ============================ caste master =============================== */
@@ -120,6 +123,62 @@ router.patch('/caste/:id', requireRole(ROLES.A1), (req, res) => {
   db.prepare(`UPDATE caste_master SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
   audit(req.user.id, 'MASTER_UPDATED', 'caste_master', id, JSON.stringify(Object.keys(req.body)));
   const row = db.prepare('SELECT id, name, name_ta, category, is_active FROM caste_master WHERE id = ?').get(id);
+  res.json({ ...row, is_active: !!row.is_active });
+});
+
+/* =========================== education master ============================= */
+router.get('/education', requireRole(ROLES.A1), (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  const where = q ? 'WHERE (name LIKE ? OR name_ta LIKE ?)' : '';
+  const params = q ? [`%${q}%`, `%${q}%`] : [];
+  const rows = db
+    .prepare(
+      `SELECT e.id, e.name, e.name_ta, e.is_active, e.created_at,
+              (SELECT COUNT(*) FROM voter_surveys s WHERE s.education_id = e.id) AS usage_count
+         FROM education_master e ${where}
+        ORDER BY e.is_active DESC, e.id`
+    )
+    .all(...params);
+  res.json(rows.map((r) => ({ ...r, is_active: !!r.is_active })));
+});
+
+router.post('/education', requireRole(ROLES.A1), (req, res) => {
+  const name = String(req.body?.name ?? '').trim();
+  const nameTa = String(req.body?.name_ta ?? '').trim() || null;
+  const isActive = req.body?.is_active === false ? 0 : 1;
+
+  if (name.length < 2) return res.status(400).json({ error: 'Education level name must be at least 2 characters', fields: { name: 'Too short' } });
+  if (db.prepare('SELECT 1 FROM education_master WHERE name = ? COLLATE NOCASE').get(name)) {
+    return res.status(409).json({ error: `"${name}" already exists`, fields: { name: 'Already exists' } });
+  }
+
+  const info = db.prepare('INSERT INTO education_master (name, name_ta, is_active) VALUES (?,?,?)').run(name, nameTa, isActive);
+  audit(req.user.id, 'MASTER_CREATED', 'education_master', info.lastInsertRowid, name);
+  res.status(201).json({ id: Number(info.lastInsertRowid), name, name_ta: nameTa, is_active: !!isActive, usage_count: 0 });
+});
+
+router.patch('/education/:id', requireRole(ROLES.A1), (req, res) => {
+  const id = Number(req.params.id);
+  if (!db.prepare('SELECT 1 FROM education_master WHERE id = ?').get(id)) {
+    return res.status(404).json({ error: 'Education entry not found' });
+  }
+  const sets = [], params = [];
+
+  if (req.body?.name !== undefined) {
+    const name = String(req.body.name).trim();
+    if (name.length < 2) return res.status(400).json({ error: 'Name must be at least 2 characters', fields: { name: 'Too short' } });
+    if (db.prepare('SELECT 1 FROM education_master WHERE name = ? COLLATE NOCASE AND id <> ?').get(name, id)) {
+      return res.status(409).json({ error: `"${name}" already exists`, fields: { name: 'Already exists' } });
+    }
+    sets.push('name = ?'); params.push(name);
+  }
+  if (req.body?.name_ta !== undefined) { sets.push('name_ta = ?'); params.push(String(req.body.name_ta).trim() || null); }
+  if (req.body?.is_active !== undefined) { sets.push('is_active = ?'); params.push(req.body.is_active ? 1 : 0); }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+
+  db.prepare(`UPDATE education_master SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
+  audit(req.user.id, 'MASTER_UPDATED', 'education_master', id, JSON.stringify(Object.keys(req.body)));
+  const row = db.prepare('SELECT id, name, name_ta, is_active FROM education_master WHERE id = ?').get(id);
   res.json({ ...row, is_active: !!row.is_active });
 });
 
@@ -413,12 +472,13 @@ const DELETABLE = {
   caste: { table: 'caste_master', usage: 'caste_id', label: 'Caste' },
   job: { table: 'job_master', usage: 'job_id', label: 'Job' },
   party: { table: 'party_master', usage: 'party_id', label: 'Party' },
+  education: { table: 'education_master', usage: 'education_id', label: 'Education' },
 };
 
 /** An option already chosen by a survey is disabled, never deleted, so historic records keep their meaning. */
 router.delete('/:type/:id', requireRole(ROLES.A1), (req, res) => {
   const def = DELETABLE[String(req.params.type).toLowerCase()];
-  if (!def) return res.status(404).json({ error: 'Unknown master type. Use caste, job or party.' });
+  if (!def) return res.status(404).json({ error: 'Unknown master type. Use caste, job, party or education.' });
   const id = Number(req.params.id);
 
   const used = db.prepare(`SELECT COUNT(*) c FROM voter_surveys WHERE ${def.usage} = ?`).get(id).c;

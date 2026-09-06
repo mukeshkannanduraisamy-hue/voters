@@ -112,7 +112,32 @@ export function authenticate(req, res, next) {
   }
 
   req.user = user;
+  touchLastSeen(user.id);
   next();
+}
+
+/** A user is considered "online" if seen within this window. Shared with routes that report it. */
+export const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * Bumps `last_seen_at` for presence ("online now") indicators — but at most
+ * once every 60s per user, in-process. `users` is a synced table, so touching
+ * it on every single authenticated request would land one outbox event per
+ * request; throttling caps it at ~1/user/minute regardless of traffic.
+ */
+const lastTouch = new Map(); // userId -> ms timestamp of the last DB write
+const TOUCH_THROTTLE_MS = 60 * 1000;
+
+function touchLastSeen(userId) {
+  const now = Date.now();
+  const last = lastTouch.get(userId) ?? 0;
+  if (now - last < TOUCH_THROTTLE_MS) return;
+  lastTouch.set(userId, now);
+  try {
+    db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(new Date(now).toISOString(), userId);
+  } catch {
+    /* presence tracking must never break a request */
+  }
 }
 
 /** requireRole(ROLES.A1, ROLES.A2) */

@@ -512,6 +512,91 @@ export function MultiPicker({ options, selected, onChange, placeholder = 'Search
   );
 }
 
+/**
+ * A closed-by-default multi-select: a single button showing a summary
+ * ("All", "3 selected", or the one chosen label), opening a checkbox panel on
+ * click. Unlike `MultiPicker` (an always-expanded box, better for a dedicated
+ * field of its own), this is meant to sit inline as a compact filter control —
+ * e.g. "Local bodies" next to other filters in a toolbar.
+ */
+export function MultiSelectDropdown({ options, selected, onChange, placeholder = 'All', searchPlaceholder = 'Search…' }: {
+  options: { value: string; label: string; sub?: string }[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return options;
+    return options.filter((o) => o.label.toLowerCase().includes(needle) || (o.sub ?? '').toLowerCase().includes(needle));
+  }, [options, q]);
+
+  const set = new Set(selected);
+  const toggle = (value: string) =>
+    onChange(set.has(value) ? selected.filter((v) => v !== value) : [...selected, value]);
+
+  const summary = selected.length === 0
+    ? placeholder
+    : selected.length === 1
+      ? (options.find((o) => o.value === selected[0])?.label ?? selected[0])
+      : `${selected.length} selected`;
+
+  return (
+    <div className="ms-dropdown" ref={ref}>
+      <button type="button" className="ms-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="listbox">
+        <span className="t-truncate">{summary}</span>
+        <Icon name="chevron-down" size={14} />
+      </button>
+
+      {open && (
+        <div className="ms-panel" role="listbox">
+          <div className="picker-search">
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} autoFocus />
+          </div>
+          <div className="picker-list">
+            {filtered.length === 0 ? (
+              <div className="t-subtle t-sm" style={{ padding: 'var(--sp-4)', textAlign: 'center' }}>No matches</div>
+            ) : (
+              filtered.map((o) => (
+                <label key={o.value} className={`picker-opt ${set.has(o.value) ? 'on' : ''}`}>
+                  <input type="checkbox" checked={set.has(o.value)} onChange={() => toggle(o.value)} />
+                  <span className="t-truncate">
+                    <span className="ta">{o.label}</span>
+                    {o.sub && <span className="t-subtle t-xs"> · {o.sub}</span>}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+          <div className="picker-foot">
+            <span>{selected.length} of {options.length} selected</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange([])} disabled={!selected.length}>
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ============================== small charts ============================= */
 export function TrendBars({ data, height = 130 }: { data: { day: string; count: number }[]; height?: number }) {
   const max = Math.max(1, ...data.map((d) => d.count));

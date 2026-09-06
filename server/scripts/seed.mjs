@@ -7,7 +7,7 @@
 import { db, migrate, uuid } from '../src/lib/db.js';
 import { migrateOutbox } from '../src/lib/outbox.js';
 import { hashPassword, ROLES } from '../src/lib/auth.js';
-import { CASTES, JOB_SECTORS, PARTIES } from './seed-data.mjs';
+import { CASTES, JOB_SECTORS, PARTIES, EDUCATION_LEVELS } from './seed-data.mjs';
 
 const FORCE = process.argv.includes('--force');
 
@@ -22,6 +22,23 @@ function seedCastes() {
   );
   for (const c of CASTES) stmt.run(c.name, c.name_ta, c.category);
   console.log(`  caste_master   ${db.prepare('SELECT COUNT(*) c FROM caste_master').get().c} rows`);
+}
+
+function seedEducation() {
+  const stmt = db.prepare(
+    `INSERT INTO education_master (name, name_ta, is_active) VALUES (?,?,1)
+     ON CONFLICT(name) DO UPDATE SET name_ta = excluded.name_ta, is_active = 1`
+  );
+  for (const e of EDUCATION_LEVELS) stmt.run(e.name, e.name_ta);
+
+  // Older seed revisions used coarser level names (e.g. plain "Primary");
+  // soft-hide any that survived here instead of deleting, since a survey may
+  // already reference one — is_active = 0 drops it from new dropdowns only.
+  const keep = EDUCATION_LEVELS.map((e) => e.name);
+  const placeholders = keep.map(() => '?').join(',');
+  db.prepare(`UPDATE education_master SET is_active = 0 WHERE name NOT IN (${placeholders})`).run(...keep);
+
+  console.log(`  education_master ${db.prepare('SELECT COUNT(*) c FROM education_master WHERE is_active = 1').get().c} active rows`);
 }
 
 function seedJobs() {
@@ -96,6 +113,7 @@ console.log('\n  Seeding master data\n');
 seedCastes();
 seedJobs();
 seedParties();
+seedEducation();
 
 console.log('\n  Seeding demo accounts\n');
 

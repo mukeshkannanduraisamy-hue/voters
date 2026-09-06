@@ -38,20 +38,29 @@ export function migrateOutbox() {
     // table/column names here come only from our own hardcoded SYNC_TABLES
     // whitelist (shared/sync-tables.mjs) — never from user input — so building
     // this SQL by string interpolation carries no injection risk.
+    //
+    // DROP + CREATE (not "IF NOT EXISTS") on every startup: a trigger's body is
+    // baked in at creation time, so if SYNC_TABLES ever gains a column, "IF NOT
+    // EXISTS" would leave the old trigger — and the old column list — in place
+    // forever. Recreating is a few milliseconds and guarantees the trigger
+    // always matches the current config.
     db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_outbox_${table}_ai
+      DROP TRIGGER IF EXISTS trg_outbox_${table}_ai;
+      CREATE TRIGGER trg_outbox_${table}_ai
       AFTER INSERT ON ${table} BEGIN
         INSERT INTO sync_outbox (event_id, table_name, record_pk, operation, payload)
         VALUES (vms_uuid(), '${table}', CAST(NEW.${pk} AS TEXT), 'CREATE', json_object(${newCols}));
       END;
 
-      CREATE TRIGGER IF NOT EXISTS trg_outbox_${table}_au
+      DROP TRIGGER IF EXISTS trg_outbox_${table}_au;
+      CREATE TRIGGER trg_outbox_${table}_au
       AFTER UPDATE ON ${table} BEGIN
         INSERT INTO sync_outbox (event_id, table_name, record_pk, operation, payload)
         VALUES (vms_uuid(), '${table}', CAST(NEW.${pk} AS TEXT), 'UPDATE', json_object(${newCols}));
       END;
 
-      CREATE TRIGGER IF NOT EXISTS trg_outbox_${table}_ad
+      DROP TRIGGER IF EXISTS trg_outbox_${table}_ad;
+      CREATE TRIGGER trg_outbox_${table}_ad
       AFTER DELETE ON ${table} BEGIN
         INSERT INTO sync_outbox (event_id, table_name, record_pk, operation, payload)
         VALUES (vms_uuid(), '${table}', CAST(OLD.${pk} AS TEXT), 'DELETE', json_object(${oldCols}));

@@ -328,6 +328,68 @@
 .booth-banner .progress-bar { background: #fff; }
 .booth-banner-stat { font-size: var(--fs-xs); opacity: 0.85; }
 
+/* ------------------------- multi-select dropdown -------------------------- */
+.ms-dropdown { position: relative; display: inline-block; min-width: 160px; }
+.ms-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  width: 100%; padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-base);
+  transition: border-color var(--dur) var(--ease);
+}
+.ms-trigger:hover { border-color: var(--text-subtle); }
+.ms-trigger svg { color: var(--text-subtle); flex: 0 0 auto; }
+.ms-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+  width: max(100%, 260px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-xl);
+  overflow: hidden;
+  animation: pop 140ms var(--ease);
+}
+.ms-panel .picker-list { max-height: 240px; }
+
+/* ------------------------------ online status ----------------------------- */
+.presence-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: var(--r-full);
+  background: var(--text-subtle);
+  box-shadow: 0 0 0 2px var(--surface);
+  flex: 0 0 9px;
+}
+.presence-dot.online { background: var(--ok-500); }
+.presence-dot.online::after {
+  content: ''; position: absolute; width: 9px; height: 9px; border-radius: var(--r-full);
+  background: var(--ok-500); opacity: 0.5;
+  animation: presence-pulse 1.8s ease-out infinite;
+}
+.presence-wrap { position: relative; display: inline-flex; }
+@keyframes presence-pulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* ------------------------------- saved popup ------------------------------ */
+.saved-popup { text-align: center; padding: var(--sp-4) 0; }
+.saved-popup-icon {
+  width: 64px; height: 64px; margin: 0 auto var(--sp-4);
+  border-radius: var(--r-full);
+  background: var(--ok-50);
+  color: var(--ok-600);
+  display: grid; place-items: center;
+  animation: saved-pop 320ms var(--ease);
+}
+[data-theme="dark"] .saved-popup-icon { background: rgba(5, 150, 105, 0.18); }
+@keyframes saved-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 @media (max-width: 1100px) {
   .viewport-label { display: none; }
   .viewport-btn { padding: 6px 9px; }

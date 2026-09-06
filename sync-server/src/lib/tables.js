@@ -27,6 +27,7 @@ const MIRROR_DDL = {
       created_by     CHAR(36)     NULL,
       created_at     DATETIME     NULL,
       last_login_at  DATETIME     NULL,
+      last_seen_at   DATETIME     NULL,
       INDEX idx_users_mobile (mobile_number)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
@@ -72,6 +73,15 @@ const MIRROR_DDL = {
       created_at  DATETIME NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
+  education_master: `
+    CREATE TABLE IF NOT EXISTS education_master (
+      id          BIGINT NOT NULL PRIMARY KEY,
+      name        VARCHAR(191) NOT NULL,
+      name_ta     VARCHAR(191) NULL,
+      is_active   TINYINT(1) NOT NULL DEFAULT 1,
+      created_at  DATETIME NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `,
   voter_surveys: `
     CREATE TABLE IF NOT EXISTS voter_surveys (
       epic_id                     VARCHAR(32) NOT NULL PRIMARY KEY,
@@ -81,9 +91,11 @@ const MIRROR_DDL = {
       caste_id                    BIGINT NULL,
       job_id                      BIGINT NULL,
       party_id                    BIGINT NULL,
+      education_id                BIGINT NULL,
       other_job_text              VARCHAR(255) NULL,
       remarks                     TEXT NULL,
       surveyed_by                 CHAR(36) NULL,
+      last_updated_by             CHAR(36) NULL,
       surveyed_at                 DATETIME NULL,
       updated_at                  DATETIME NULL,
       INDEX idx_vs_party (party_id),

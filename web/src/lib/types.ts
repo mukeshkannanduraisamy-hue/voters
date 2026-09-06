@@ -42,6 +42,8 @@ export interface ManagedUser {
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  lastSeenAt: string | null;
+  isOnline: boolean;
   createdByName: string | null;
   surveysDone: number;
   isGlobal: boolean;
@@ -51,6 +53,18 @@ export interface ManagedUser {
   localBodySummary: string[];
   localBodyOverflow: number;
   jurisdictions: JurisdictionBooth[];
+}
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select';
+
+export interface CustomFieldAnswer {
+  fieldId: number;
+  key: string;
+  label: string;
+  labelTa: string | null;
+  fieldType: CustomFieldType;
+  isActive: boolean;
+  value: string | null;
 }
 
 export interface SurveyRecord {
@@ -73,10 +87,17 @@ export interface SurveyRecord {
   partyCode: string | null;
   colorCode: string | null;
   symbolImg: string | null;
+  educationId: number | null;
+  educationName: string | null;
+  educationNameTa: string | null;
   remarks: string | null;
   surveyedAt: string;
   agentName: string | null;
   agentMobile: string | null;
+  agentId: string | null;
+  lastUpdatedBy: string | null;
+  lastEditorName: string | null;
+  customFields?: CustomFieldAnswer[];
 }
 
 export interface Voter {
@@ -144,6 +165,26 @@ export interface Dropdowns {
   jobs: { id: number; category: string; category_ta: string | null; name: string; name_ta: string | null }[];
   sectors: { category: string; category_ta: string | null; jobs: { id: number; name: string; name_ta: string | null }[] }[];
   parties: { id: number; name: string; name_ta: string | null; party_code: string; color_code: string; symbol_img: string | null }[];
+  educationLevels: { id: number; name: string; name_ta: string | null }[];
+}
+
+export interface EducationRow {
+  id: number; name: string; name_ta: string | null;
+  is_active: boolean; created_at?: string; usage_count?: number;
+}
+
+export interface FormFieldDef {
+  id: number;
+  key: string;
+  label: string;
+  labelTa: string | null;
+  fieldType: CustomFieldType;
+  options: string[] | null;
+  isRequired: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+  usageCount?: number;
 }
 
 /* ------------------------------- booths --------------------------------- */
@@ -183,6 +224,7 @@ export interface DashboardStats {
 export interface AgentProgress {
   id: string; fullName: string | null; mobileNumber: string;
   isActive: boolean; lastLoginAt: string | null;
+  lastSeenAt?: string | null; isOnline?: boolean;
   surveysDone: number; todayDone: number; assignedVoters: number;
   boothCount: number; partList: number[]; progress: number; pending: number;
 }

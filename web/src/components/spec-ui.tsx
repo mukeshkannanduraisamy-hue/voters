@@ -1,7 +1,18 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Icon } from './icons';
-import { Button } from './ui';
+import { Button, fmtRelative } from './ui';
 import type { LocalBodyType, LocalBodyTypeOrMixed } from '../lib/types';
+
+/* ------------------------------ online status ----------------------------- */
+/** A small pulsing dot for "online now"; hover/title shows the last-seen time when offline. */
+export function OnlineDot({ isOnline, lastSeenAt }: { isOnline: boolean; lastSeenAt?: string | null }) {
+  const title = isOnline ? 'Online now' : lastSeenAt ? `Last seen ${fmtRelative(lastSeenAt)}` : 'Never signed in';
+  return (
+    <span className="presence-wrap" title={title}>
+      <span className={`presence-dot ${isOnline ? 'online' : ''}`} />
+    </span>
+  );
+}
 
 /* ---------------------------- local body badge --------------------------- */
 export function LocalBodyBadge({ type }: { type: LocalBodyType | LocalBodyTypeOrMixed }) {

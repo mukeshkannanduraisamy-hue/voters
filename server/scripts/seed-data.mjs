@@ -129,3 +129,18 @@ export const JOB_SECTORS = [
     ],
   },
 ];
+
+export const EDUCATION_LEVELS = [
+  { name: 'Illiterate',                 name_ta: 'எழுத்தறிவு இல்லாதவர்' },
+  { name: 'Primary (1st–5th)',          name_ta: 'தொடக்கக் கல்வி (1-5 ஆம் வகுப்பு)' },
+  { name: 'Middle School (6th–8th)',    name_ta: 'நடுநிலைக் கல்வி (6-8 ஆம் வகுப்பு)' },
+  { name: '10th / SSLC',                name_ta: '10 ஆம் வகுப்பு / எஸ்.எஸ்.எல்.சி' },
+  { name: '12th / HSC',                 name_ta: '12 ஆம் வகுப்பு / உயர்நிலைக் கல்வி' },
+  { name: 'Diploma / ITI',              name_ta: 'பட்டயம் / ஐ.டி.ஐ' },
+  { name: 'Graduate (BA/BSc/BCom)',     name_ta: 'பட்டதாரி (பி.ஏ/பி.எஸ்.சி/பி.காம்)' },
+  { name: 'Engineering (BE/BTech)',     name_ta: 'பொறியியல் பட்டதாரி (பி.இ/பி.டெக்)' },
+  { name: 'Postgraduate (MA/MSc/MTech)', name_ta: 'முதுகலைப் பட்டதாரி (எம்.ஏ/எம்.எஸ்.சி/எம்.டெக்)' },
+  { name: 'Professional (MBBS/LLB/MBA/CA)', name_ta: 'தொழில்முறைப் படிப்பு (எம்.பி.பி.எஸ்/எல்.எல்.பி/எம்.பி.ஏ/சி.ஏ)' },
+  { name: 'PhD / Doctorate',            name_ta: 'முனைவர் பட்டம் (பிஎச்.டி)' },
+  { name: 'Not Disclosed',              name_ta: 'தெரிவிக்கவில்லை' },
+];

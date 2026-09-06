@@ -136,7 +136,7 @@ export default function Profile() {
                       </div>
                       <div className="chips mt-3">
                         {g.parts.map((p) => (
-                          <span key={p} className="chip" style={{ paddingRight: 11 }}>Part {p}</span>
+                          <span key={p} className="chip" style={{ paddingRight: 11 }}>Booth {p}</span>
                         ))}
                       </div>
                     </div>

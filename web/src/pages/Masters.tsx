@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../lib/api';
 import type {
-  CasteCategory, CasteRow, JobRow, JobSectorGroup, LocalBodyList, LocalBodyRow, PartyRow,
+  CasteCategory, CasteRow, EducationRow, JobRow, JobSectorGroup, LocalBodyList, LocalBodyRow, PartyRow,
 } from '../lib/types';
 import {
   Alert, Badge, Button, Card, CardHead, ConfirmModal, Empty, Field, Input, Modal, PageHead,
@@ -10,7 +10,7 @@ import {
 import { ImageUploader, LocalBodyBadge, PartySymbol } from '../components/spec-ui';
 import { Icon } from '../components/icons';
 
-type Tab = 'caste' | 'job' | 'party' | 'local-body';
+type Tab = 'caste' | 'job' | 'party' | 'education' | 'local-body';
 
 const CATEGORIES: CasteCategory[] = ['OC', 'BC', 'BCM', 'MBC', 'SC', 'ST', 'OTHER'];
 const CATEGORY_LABEL: Record<CasteCategory, string> = {
@@ -39,15 +39,204 @@ export default function Masters() {
             { value: 'caste' as Tab, label: '1. Caste Master' },
             { value: 'job' as Tab, label: '2. Job Master' },
             { value: 'party' as Tab, label: '3. Party Master' },
-            { value: 'local-body' as Tab, label: '4. Local Body Master' },
+            { value: 'education' as Tab, label: '4. Education Master' },
+            { value: 'local-body' as Tab, label: '5. Local Body Master' },
           ]}
         />
       </div>
       {tab === 'caste' && <CasteMaster />}
       {tab === 'job' && <JobMaster />}
       {tab === 'party' && <PartyMaster />}
+      {tab === 'education' && <EducationMaster />}
       {tab === 'local-body' && <LocalBodyMaster />}
     </>
+  );
+}
+
+/* ============================= education master =========================== */
+function EducationMaster() {
+  const toast = useToast();
+  const [rows, setRows] = useState<EducationRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [q, setQ] = useState('');
+  const [editing, setEditing] = useState<EducationRow | null>(null);
+  const [deleting, setDeleting] = useState<EducationRow | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const [name, setName] = useState('');
+  const [nameTa, setNameTa] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  const load = async () => {
+    setRows(null);
+    setError('');
+    try { setRows(await api.get<EducationRow[]>('/api/masters/education')); }
+    catch (err) { setError(err instanceof ApiError ? err.message : 'Could not load education master'); }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const add = async (e: FormEvent) => {
+    e.preventDefault();
+    setAddError('');
+    if (name.trim().length < 2) { setAddError('Enter at least 2 characters.'); return; }
+    setAdding(true);
+    try {
+      await api.post('/api/masters/education', { name: name.trim(), name_ta: nameTa.trim() });
+      toast.ok('Education level added', name.trim());
+      setName(''); setNameTa('');
+      await load();
+    } catch (err) {
+      setAddError(err instanceof ApiError ? err.message : 'Could not add the entry');
+    } finally { setAdding(false); }
+  };
+
+  const toggle = async (r: EducationRow) => {
+    setBusyId(r.id);
+    try {
+      await api.patch(`/api/masters/education/${r.id}`, { is_active: !r.is_active });
+      await load();
+    } catch (err) { toast.bad('Could not update', err instanceof ApiError ? err.message : undefined); }
+    finally { setBusyId(null); }
+  };
+
+  const remove = async () => {
+    if (!deleting) return;
+    setBusyId(deleting.id);
+    try {
+      await api.del(`/api/masters/education/${deleting.id}`);
+      toast.ok('Entry deleted', deleting.name);
+      setDeleting(null);
+      await load();
+    } catch (err) { toast.bad('Could not delete', err instanceof ApiError ? err.message : undefined); setDeleting(null); }
+    finally { setBusyId(null); }
+  };
+
+  const filtered = (rows ?? []).filter((r) =>
+    !q.trim() || r.name.toLowerCase().includes(q.toLowerCase()) || (r.name_ta ?? '').includes(q)
+  );
+
+  return (
+    <>
+      <Card className="mb-4">
+        <CardHead title="Add new education level" icon="plus" />
+        <div className="card-body">
+          <form onSubmit={add}>
+            <div className="row" style={{ alignItems: 'flex-end' }}>
+              <div style={{ flex: '1 1 220px' }}>
+                <Field label="Education level (English)" required error={addError}>
+                  <Input value={name} onChange={(e) => { setName(e.target.value); setAddError(''); }} placeholder="e.g. Higher Secondary" invalid={!!addError} maxLength={100} />
+                </Field>
+              </div>
+              <div style={{ flex: '1 1 220px' }}>
+                <Field label="Education level (Tamil)">
+                  <Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} placeholder="மேல்நிலைக் கல்வி" maxLength={100} />
+                </Field>
+              </div>
+              <Button type="submit" variant="primary" icon="save" loading={adding}>Save</Button>
+            </div>
+          </form>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHead
+          title="Education master"
+          sub={rows ? `${fmt(rows.length)} total · ${fmt(rows.filter((r) => r.is_active).length)} active` : undefined}
+          icon="database"
+          actions={<Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" style={{ width: 200 }} aria-label="Search education levels" />}
+        />
+        <div className="card-body flush">
+          {error && <div style={{ padding: 'var(--sp-4)' }}><Alert tone="bad">{error}</Alert></div>}
+          {!rows ? <TableSkeleton rows={6} cols={4} /> : filtered.length === 0 ? (
+            <Empty icon="database" title="No education levels found" />
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 52 }}>#</th>
+                    <th>Education level</th>
+                    <th>Status</th>
+                    <th className="num">Used by</th>
+                    <th>Created</th>
+                    <th style={{ width: 190 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r, i) => (
+                    <tr key={r.id} style={{ opacity: r.is_active ? 1 : 0.6 }}>
+                      <td><span className="rank">{i + 1}</span></td>
+                      <td>
+                        <div className="t-semi">{r.name}</div>
+                        {r.name_ta && <div className="t-sm ta t-muted">{r.name_ta}</div>}
+                      </td>
+                      <td>{r.is_active ? <Badge tone="ok" dot>Active</Badge> : <Badge tone="muted" dot>Disabled</Badge>}</td>
+                      <td className="num tabnum">{r.usage_count ? <Badge tone="ok">{fmt(r.usage_count)}</Badge> : <span className="t-subtle">—</span>}</td>
+                      <td className="t-sm t-muted">{fmtDate(r.created_at)}</td>
+                      <td>
+                        <div className="actions">
+                          <Button size="sm" icon="edit" onClick={() => setEditing(r)}>Edit</Button>
+                          <Button size="sm" icon={r.is_active ? 'ban' : 'check'} loading={busyId === r.id} onClick={() => void toggle(r)}>
+                            {r.is_active ? 'Disable' : 'Enable'}
+                          </Button>
+                          <Button size="sm" variant="danger-soft" icon="trash" aria-label="Delete" onClick={() => setDeleting(r)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {editing && <EditEducationModal row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load(); }} />}
+      <ConfirmModal
+        open={!!deleting} danger title={`Delete "${deleting?.name}"?`} confirmLabel="Delete"
+        busy={busyId === deleting?.id}
+        message={deleting?.usage_count
+          ? <>Used by <strong>{fmt(deleting.usage_count)}</strong> survey record(s), so it cannot be deleted. Disable it instead.</>
+          : <>This removes the education level permanently.</>}
+        onCancel={() => setDeleting(null)} onConfirm={() => void remove()}
+      />
+    </>
+  );
+}
+
+function EditEducationModal({ row, onClose, onSaved }: { row: EducationRow; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const [name, setName] = useState(row.name);
+  const [nameTa, setNameTa] = useState(row.name_ta ?? '');
+  const [active, setActive] = useState(row.is_active);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setError('');
+    if (name.trim().length < 2) { setError('Name must be at least 2 characters.'); return; }
+    setSaving(true);
+    try {
+      await api.patch(`/api/masters/education/${row.id}`, { name: name.trim(), name_ta: nameTa.trim(), is_active: active });
+      toast.ok('Education level updated', name.trim());
+      onSaved();
+    } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not save changes'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open title="Edit education level" icon="edit" onClose={onClose}
+      footer={<><Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>Save changes</Button></>}>
+      {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
+      <div className="stack">
+        <Field label="Education level (English)" required><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+        <Field label="Education level (Tamil)"><Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} /></Field>
+        <Field label="Status"><Switch checked={active} onChange={setActive} label={active ? 'Active — shown to agents' : 'Disabled — hidden'} /></Field>
+        {!!row.usage_count && <Alert tone="info">Used by <strong>{fmt(row.usage_count)}</strong> survey record(s).</Alert>}
+      </div>
+    </Modal>
   );
 }
 

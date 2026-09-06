@@ -16,6 +16,14 @@
  *     deployment as the same source workbook, not trickled through events.
  *   - audit_log       — high-volume, low value centrally (a row on every
  *     login), and multiplies the event count for no operational benefit.
+ *   - survey_field_defs / survey_field_values — the A1 custom-form-field
+ *     feature is intentionally local-only for now (a small, rare-changing
+ *     definitions table plus one row per custom answer). Syncing it centrally
+ *     is a natural follow-up but out of scope for this pass.
+ *
+ * `users.last_seen_at` is throttled to at most one write per user per 60s by
+ * the caller (see `touchLastSeen` in lib/auth.js) specifically so this
+ * presence heartbeat can't flood the outbox with one event per request.
  *
  * This design assumes a single SQLite writer syncing to one central MySQL —
  * exactly what was asked for. If multiple independent SQLite instances are
@@ -30,7 +38,7 @@ export const SYNC_TABLES = {
     pk: 'id',
     columns: [
       'id', 'mobile_number', 'password_hash', 'role', 'epic_id',
-      'full_name', 'is_active', 'created_by', 'created_at', 'last_login_at',
+      'full_name', 'is_active', 'created_by', 'created_at', 'last_login_at', 'last_seen_at',
     ],
   },
   user_jurisdictions: {
@@ -49,12 +57,16 @@ export const SYNC_TABLES = {
     pk: 'id',
     columns: ['id', 'name', 'name_ta', 'party_code', 'color_code', 'symbol_img', 'is_active', 'created_at'],
   },
+  education_master: {
+    pk: 'id',
+    columns: ['id', 'name', 'name_ta', 'is_active', 'created_at'],
+  },
   voter_surveys: {
     pk: 'epic_id',
     columns: [
       'epic_id', 'corrected_name_ta', 'corrected_relative_name_ta', 'phone_number',
-      'caste_id', 'job_id', 'party_id', 'other_job_text', 'remarks',
-      'surveyed_by', 'surveyed_at', 'updated_at',
+      'caste_id', 'job_id', 'party_id', 'education_id', 'other_job_text', 'remarks',
+      'surveyed_by', 'last_updated_by', 'surveyed_at', 'updated_at',
     ],
   },
   polling_parts: {

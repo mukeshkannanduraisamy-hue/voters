@@ -9,6 +9,7 @@ import {
   fmt, fmtDate, fmtRelative, initials, useToast,
 } from '../components/ui';
 import { BoothPicker } from '../components/BoothPicker';
+import { OnlineDot } from '../components/spec-ui';
 import { Icon } from '../components/icons';
 
 const PAGE_SIZE = 15;
@@ -141,7 +142,10 @@ export default function Users() {
                             {initials(u.fullName ?? u.mobileNumber)}
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div className="t-semi mono">+91 {u.mobileNumber}</div>
+                            <div className="row tight" style={{ flexWrap: 'nowrap' }}>
+                              <span className="t-semi mono">+91 {u.mobileNumber}</span>
+                              <OnlineDot isOnline={u.isOnline} lastSeenAt={u.lastSeenAt} />
+                            </div>
                             <div className="t-xs t-subtle ta t-truncate">{u.fullName ?? 'Unnamed'}</div>
                           </div>
                         </div>

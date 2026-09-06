@@ -15,12 +15,14 @@ const VOTER_COLUMNS = `
   pp.local_body_name_ta, pp.local_body_type, pp.main_village_ta,
   pp.ac_no, pp.ac_name_ta, pp.taluk_ta, pp.district_ta, pp.pincode,
   s.epic_id AS survey_epic, s.corrected_name_ta, s.corrected_relative_name_ta,
-  s.phone_number, s.caste_id, s.job_id, s.party_id, s.other_job_text, s.remarks,
-  s.surveyed_at, s.surveyed_by,
+  s.phone_number, s.caste_id, s.job_id, s.party_id, s.education_id, s.other_job_text, s.remarks,
+  s.surveyed_at, s.surveyed_by, s.last_updated_by,
   cm.name AS caste_name, cm.name_ta AS caste_name_ta, cm.category AS caste_category,
   jm.name AS job_name, jm.name_ta AS job_name_ta, jm.category AS job_category, jm.category_ta AS job_category_ta,
   pm.name AS party_name, pm.name_ta AS party_name_ta, pm.party_code, pm.color_code, pm.symbol_img,
-  ag.full_name AS agent_name, ag.mobile_number AS agent_mobile`;
+  em.name AS education_name, em.name_ta AS education_name_ta,
+  ag.full_name AS agent_name, ag.mobile_number AS agent_mobile,
+  ed.full_name AS last_editor_name`;
 
 const VOTER_JOINS = `
   FROM voters_master v
@@ -29,7 +31,9 @@ const VOTER_JOINS = `
   LEFT JOIN caste_master cm ON cm.id = s.caste_id
   LEFT JOIN job_master   jm ON jm.id = s.job_id
   LEFT JOIN party_master pm ON pm.id = s.party_id
-  LEFT JOIN users        ag ON ag.id = s.surveyed_by`;
+  LEFT JOIN education_master em ON em.id = s.education_id
+  LEFT JOIN users        ag ON ag.id = s.surveyed_by
+  LEFT JOIN users        ed ON ed.id = s.last_updated_by`;
 
 /** Counting needs neither the master joins nor the agent lookup. */
 const COUNT_JOINS = `
@@ -37,7 +41,29 @@ const COUNT_JOINS = `
   JOIN polling_parts pp ON pp.part_no = v.part_no
   LEFT JOIN voter_surveys s ON s.epic_id = v.epic_id`;
 
-function shapeVoter(r) {
+/** Custom field answers for one survey, joined against the current field defs so a renamed/disabled field still shows correctly. */
+function customFieldsFor(epicId) {
+  return db
+    .prepare(
+      `SELECT d.id AS field_id, d.field_key, d.label, d.label_ta, d.field_type, d.is_active, v.value
+         FROM survey_field_values v
+         JOIN survey_field_defs d ON d.id = v.field_id
+        WHERE v.epic_id = ?
+        ORDER BY d.sort_order, d.id`
+    )
+    .all(epicId)
+    .map((r) => ({
+      fieldId: r.field_id,
+      key: r.field_key,
+      label: r.label,
+      labelTa: r.label_ta,
+      fieldType: r.field_type,
+      isActive: !!r.is_active,
+      value: r.value,
+    }));
+}
+
+function shapeVoter(r, { includeCustomFields = false } = {}) {
   if (!r) return null;
   return {
     epicId: r.epic_id,
@@ -83,10 +109,17 @@ function shapeVoter(r) {
           partyCode: r.party_code,
           colorCode: r.color_code,
           symbolImg: r.symbol_img,
+          educationId: r.education_id,
+          educationName: r.education_name,
+          educationNameTa: r.education_name_ta,
           remarks: r.remarks,
           surveyedAt: r.surveyed_at,
           agentName: r.agent_name,
           agentMobile: r.agent_mobile,
+          agentId: r.surveyed_by,
+          lastUpdatedBy: r.last_updated_by,
+          lastEditorName: r.last_editor_name,
+          customFields: includeCustomFields ? customFieldsFor(r.epic_id) : undefined,
         }
       : null,
   };
@@ -136,6 +169,8 @@ function buildFilter(req) {
   const partyId = Number(req.query.party_id);
   if (Number.isInteger(partyId) && partyId > 0) { where.push('s.party_id = ?'); params.push(partyId); }
 
+  // Also accepts the literal 'me', so the UI can filter "done by me" without
+  // knowing its own id in the URL (handled by the caller before this runs).
   const agentId = String(req.query.agent_id ?? '').trim();
   if (agentId) { where.push('s.surveyed_by = ?'); params.push(agentId); }
 
@@ -147,8 +182,13 @@ function buildFilter(req) {
 /**
  * GET /api/voters/directory
  * Paged, sortable electoral roll restricted to the caller's booths.
+ * `agent_id=me` resolves to the caller's own id — lets any role (including a
+ * field agent looking at their own booth) filter "done by me" without needing
+ * to already know their own user id.
  */
 router.get('/directory', (req, res) => {
+  if (req.query.agent_id === 'me') req.query.agent_id = req.user.id;
+
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(10, Number(req.query.limit) || 25));
   const f = buildFilter(req);
@@ -167,7 +207,7 @@ router.get('/directory', (req, res) => {
     .all(...f.params, limit, (page - 1) * limit);
 
   res.json({
-    rows: rows.map(shapeVoter),
+    rows: rows.map((r) => shapeVoter(r)),
     total,
     page,
     limit,
@@ -217,7 +257,7 @@ router.get('/verify-epic', requireRole(ROLES.A1, ROLES.A2), (req, res) => {
   });
 });
 
-/** GET /api/voters/:epic — one elector with their survey, scope-checked */
+/** GET /api/voters/:epic — one elector with their survey (incl. custom fields), scope-checked */
 router.get('/:epic', (req, res) => {
   const scope = buildPartFilter(req.user, 'v');
   const epic = String(req.params.epic).trim().toUpperCase();
@@ -231,15 +271,19 @@ router.get('/:epic', (req, res) => {
       error: exists ? 'This elector is outside your assigned booths' : 'No elector found with this EPIC number',
     });
   }
-  res.json(shapeVoter(row));
+  res.json(shapeVoter(row, { includeCustomFields: true }));
 });
 
 /**
- * POST /api/voters/survey/submit — field agents only.
- * Uses an UPSERT keyed on epic_id, so re-surveying an elector updates their
- * record instead of creating a duplicate.
+ * POST /api/voters/survey/submit — A1, A2 (correction/oversight) and A3
+ * (the original field flow). Uses an UPSERT keyed on epic_id, so re-surveying
+ * an elector updates their record instead of creating a duplicate.
+ *
+ * The agent credited with a survey (`surveyed_by`) is never overwritten by an
+ * admin's edit — that would erase who actually did the fieldwork. An admin's
+ * touch is recorded separately in `last_updated_by` instead.
  */
-router.post('/survey/submit', requireRole(ROLES.A3), (req, res) => {
+router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, res) => {
   const b = req.body ?? {};
   const epic = String(b.epicId ?? b.epic_id ?? '').trim().toUpperCase();
   const correctedName = String(b.correctedNameTa ?? b.corrected_name_ta ?? '').trim() || null;
@@ -248,8 +292,10 @@ router.post('/survey/submit', requireRole(ROLES.A3), (req, res) => {
   const casteId = b.casteId ?? b.caste_id ? Number(b.casteId ?? b.caste_id) : null;
   const jobId = b.jobId ?? b.job_id ? Number(b.jobId ?? b.job_id) : null;
   const partyId = b.partyId ?? b.party_id ? Number(b.partyId ?? b.party_id) : null;
+  const educationId = b.educationId ?? b.education_id ? Number(b.educationId ?? b.education_id) : null;
   const otherJobText = String(b.otherJobText ?? b.other_job_text ?? '').trim() || null;
   const remarks = String(b.remarks ?? '').trim() || null;
+  const customFields = b.customFields && typeof b.customFields === 'object' ? b.customFields : {};
 
   const fields = {};
   if (!epic) fields.epicId = 'EPIC number is required';
@@ -284,30 +330,82 @@ router.post('/survey/submit', requireRole(ROLES.A3), (req, res) => {
       return res.status(422).json({ error: `Selected ${label} is no longer available`, fields: { [field]: 'Unavailable' } });
     }
   }
+  if (educationId && !db.prepare('SELECT 1 FROM education_master WHERE id = ? AND is_active = 1').get(educationId)) {
+    return res.status(422).json({ error: 'Selected education level is no longer available', fields: { educationId: 'Unavailable' } });
+  }
 
-  const existing = db.prepare('SELECT epic_id FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
+  // Every active, required custom field must have a non-empty answer; a value
+  // for an inactive/unknown field id is silently ignored (a form the A1
+  // disabled mid-survey shouldn't block submission).
+  const activeDefs = db.prepare('SELECT id, label, field_type, is_required, options_json FROM survey_field_defs WHERE is_active = 1').all();
+  const customFieldErrors = {};
+  for (const def of activeDefs) {
+    const raw = customFields[def.id];
+    const value = raw === undefined || raw === null ? '' : String(raw).trim();
+    if (def.is_required && !value) {
+      customFieldErrors[`custom_${def.id}`] = `${def.label} is required`;
+      continue;
+    }
+    if (value && def.field_type === 'select') {
+      const options = JSON.parse(def.options_json || '[]');
+      if (!options.includes(value)) {
+        customFieldErrors[`custom_${def.id}`] = `Invalid option for ${def.label}`;
+      }
+    }
+    if (value && def.field_type === 'number' && Number.isNaN(Number(value))) {
+      customFieldErrors[`custom_${def.id}`] = `${def.label} must be a number`;
+    }
+  }
+  if (Object.keys(customFieldErrors).length) {
+    return res.status(400).json({ error: 'Please correct the custom field values', fields: customFieldErrors });
+  }
+
+  const existing = db.prepare('SELECT epic_id, surveyed_by FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
   const now = nowIso();
+  // A field agent's own credit is preserved even when an admin edits later;
+  // a brand-new record (by anyone) credits whoever is submitting it now.
+  const surveyedBy = existing ? existing.surveyed_by : req.user.id;
 
-  db.prepare(
-    `INSERT INTO voter_surveys
-       (epic_id, corrected_name_ta, corrected_relative_name_ta, phone_number,
-        caste_id, job_id, party_id, other_job_text, remarks, surveyed_by, surveyed_at, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(epic_id) DO UPDATE SET
-       corrected_name_ta = excluded.corrected_name_ta,
-       corrected_relative_name_ta = excluded.corrected_relative_name_ta,
-       phone_number = excluded.phone_number,
-       caste_id = excluded.caste_id,
-       job_id = excluded.job_id,
-       party_id = excluded.party_id,
-       other_job_text = excluded.other_job_text,
-       remarks = excluded.remarks,
-       surveyed_by = excluded.surveyed_by,
-       updated_at = excluded.updated_at`
-  ).run(
-    voter.epic_id, correctedName, correctedRelative, phone,
-    casteId, jobId, partyId, otherJobText, remarks, req.user.id, now, now
-  );
+  db.exec('BEGIN');
+  try {
+    db.prepare(
+      `INSERT INTO voter_surveys
+         (epic_id, corrected_name_ta, corrected_relative_name_ta, phone_number,
+          caste_id, job_id, party_id, education_id, other_job_text, remarks,
+          surveyed_by, last_updated_by, surveyed_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(epic_id) DO UPDATE SET
+         corrected_name_ta = excluded.corrected_name_ta,
+         corrected_relative_name_ta = excluded.corrected_relative_name_ta,
+         phone_number = excluded.phone_number,
+         caste_id = excluded.caste_id,
+         job_id = excluded.job_id,
+         party_id = excluded.party_id,
+         education_id = excluded.education_id,
+         other_job_text = excluded.other_job_text,
+         remarks = excluded.remarks,
+         last_updated_by = excluded.last_updated_by,
+         updated_at = excluded.updated_at`
+    ).run(
+      voter.epic_id, correctedName, correctedRelative, phone,
+      casteId, jobId, partyId, educationId, otherJobText, remarks,
+      surveyedBy, req.user.id, now, now
+    );
+
+    const upsertField = db.prepare(
+      `INSERT INTO survey_field_values (epic_id, field_id, value) VALUES (?,?,?)
+       ON CONFLICT(epic_id, field_id) DO UPDATE SET value = excluded.value`
+    );
+    for (const def of activeDefs) {
+      const raw = customFields[def.id];
+      const value = raw === undefined || raw === null ? '' : String(raw).trim();
+      if (value) upsertField.run(voter.epic_id, def.id, value);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: 'Could not save the survey', detail: err.message });
+  }
 
   audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id, null);
 
@@ -316,7 +414,7 @@ router.post('/survey/submit', requireRole(ROLES.A3), (req, res) => {
     ok: true,
     updated: !!existing,
     message: existing ? 'Survey record updated' : 'Survey saved successfully',
-    voter: shapeVoter(fresh),
+    voter: shapeVoter(fresh, { includeCustomFields: true }),
   });
 });
 

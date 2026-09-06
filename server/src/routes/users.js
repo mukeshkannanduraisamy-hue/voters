@@ -1,7 +1,7 @@
 import express from 'express';
 import { db, uuid } from '../lib/db.js';
 import {
-  authenticate, requireRole, hashPassword, audit, ROLES, ROLE_LABELS, ROLE_LABELS_TA,
+  authenticate, requireRole, hashPassword, audit, ROLES, ROLE_LABELS, ROLE_LABELS_TA, ONLINE_WINDOW_MS,
 } from '../lib/auth.js';
 import { assignableParts, scopeContains, scopeDetail, visibleUserIds } from '../lib/scope.js';
 import { invalidateDashboardCache } from './dashboard.js';
@@ -10,6 +10,11 @@ const router = express.Router();
 router.use(authenticate);
 
 const MOBILE_RE = /^[6-9]\d{9}$/;
+
+function isOnline(lastSeenAt) {
+  if (!lastSeenAt) return false;
+  return Date.now() - new Date(lastSeenAt).getTime() < ONLINE_WINDOW_MS;
+}
 
 function shapeUser(row) {
   const jurisdictions = scopeDetail(row.id);
@@ -25,6 +30,8 @@ function shapeUser(row) {
     isActive: !!row.is_active,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
+    lastSeenAt: row.last_seen_at ?? null,
+    isOnline: isOnline(row.last_seen_at),
     createdByName: row.created_by_name ?? null,
     surveysDone: row.surveys_done ?? 0,
     isGlobal: row.role === ROLES.A1,
@@ -71,7 +78,7 @@ router.get('/list', requireRole(ROLES.A1, ROLES.A2), (req, res) => {
   const rows = db
     .prepare(
       `SELECT u.id, u.mobile_number, u.role, u.epic_id, u.full_name, u.is_active,
-              u.created_at, u.last_login_at,
+              u.created_at, u.last_login_at, u.last_seen_at,
               creator.full_name AS created_by_name,
               (SELECT COUNT(*) FROM voter_surveys s WHERE s.surveyed_by = u.id) AS surveys_done
          FROM users u
@@ -99,7 +106,7 @@ router.get('/:id', requireRole(ROLES.A1, ROLES.A2), (req, res) => {
   const row = db
     .prepare(
       `SELECT u.id, u.mobile_number, u.role, u.epic_id, u.full_name, u.is_active,
-              u.created_at, u.last_login_at, creator.full_name AS created_by_name,
+              u.created_at, u.last_login_at, u.last_seen_at, creator.full_name AS created_by_name,
               (SELECT COUNT(*) FROM voter_surveys s WHERE s.surveyed_by = u.id) AS surveys_done
          FROM users u LEFT JOIN users creator ON creator.id = u.created_by
         WHERE u.id = ?`

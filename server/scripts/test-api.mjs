@@ -353,14 +353,142 @@ section('Field survey submission (A3)');
     (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, epicId: outsideEpic } })).status === 403);
   check('disabled master option rejected 422',
     (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, casteId: newCasteId } })).status === 422);
-  check('A1 cannot submit surveys (agent-only route)', (await api('POST', '/api/voters/survey/submit', { token: T1, body: valid })).status === 403);
-  check('A2 cannot submit surveys', (await api('POST', '/api/voters/survey/submit', { token: T2, body: valid })).status === 403);
 
   const bParts = (await api('GET', '/api/booths', { token: T3B })).data.parts.map((p) => p.part_no);
   if (!bParts.includes(a3Voter.partNo)) {
     check('agent B cannot survey agent A’s elector (403)',
       (await api('POST', '/api/voters/survey/submit', { token: T3B, body: valid })).status === 403);
   }
+
+  // A1 and A2 can now edit/submit survey data directly, but must never steal
+  // credit for fieldwork the agent already did — surveyed_by stays A3, only
+  // last_updated_by moves to whoever touched the record most recently.
+  const byA1 = await api('POST', '/api/voters/survey/submit', { token: T1, body: { ...valid, correctedNameTa: 'A1 எடிட் செய்தது' } });
+  check('A1 can now edit/submit survey data directly', byA1.status === 200 && byA1.data.ok, JSON.stringify(byA1.data).slice(0, 200));
+  check('original field agent stays credited as surveyed-by after an A1 edit', byA1.data?.voter?.survey?.agentId === a3.data.user.id, byA1.data?.voter?.survey?.agentId);
+  check('last-updated-by moves to A1 after the edit', byA1.data?.voter?.survey?.lastUpdatedBy === a1.data.user.id, byA1.data?.voter?.survey?.lastUpdatedBy);
+
+  const byA2 = await api('POST', '/api/voters/survey/submit', { token: T2, body: valid });
+  check('A2 can also edit/submit survey data directly', byA2.status === 200 && byA2.data.ok);
+
+  check('A3 cannot survey outside its booths, even after A1/A2 unlock (403)',
+    (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, epicId: outsideEpic } })).status === 403);
+}
+
+// ───────────────────────────────── education master + survey education field
+section('Education master & survey education field');
+let newEducationId = null;
+{
+  check('A2 blocked from education master (403)', (await api('GET', '/api/masters/education', { token: T2 })).status === 403);
+  check('A3 blocked from education master (403)', (await api('GET', '/api/masters/education', { token: T3 })).status === 403);
+
+  const list = await api('GET', '/api/masters/education', { token: T1 });
+  check('A1 lists education master', list.status === 200 && list.data.length >= 9, `got ${list.data?.length}`);
+
+  const drops = await api('GET', '/api/masters/dropdowns', { token: T3 });
+  check('dropdowns include education levels', Array.isArray(drops.data.educationLevels) && drops.data.educationLevels.length >= 9);
+
+  const mk = await api('POST', '/api/masters/education', { token: T1, body: { name: 'ZZ Test Education ' + Date.now(), name_ta: 'சோதனை' } });
+  check('A1 creates an education level', mk.status === 201 && !!mk.data.id, JSON.stringify(mk.data).slice(0, 160));
+  newEducationId = mk.data?.id;
+  check('duplicate education level rejected 409', (await api('POST', '/api/masters/education', { token: T1, body: { name: mk.data.name } })).status === 409);
+  check('A3 cannot create education levels (403)', (await api('POST', '/api/masters/education', { token: T3, body: { name: 'Hax' } })).status === 403);
+
+  const eduSector = drops.data.sectors[0];
+  const withEducation = await api('POST', '/api/voters/survey/submit', {
+    token: T3,
+    body: {
+      epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
+      phoneNumber: '9845012345', casteId: drops.data.castes[0].id, jobId: eduSector.jobs[0].id, partyId: drops.data.parties[0].id,
+      educationId: drops.data.educationLevels[0].id,
+    },
+  });
+  check('survey accepts an education selection', withEducation.status === 200 && withEducation.data.ok, JSON.stringify(withEducation.data).slice(0, 200));
+  check('survey stores the education level', !!withEducation.data?.voter?.survey?.educationName, withEducation.data?.voter?.survey?.educationName);
+
+  await api('PATCH', `/api/masters/education/${newEducationId}`, { token: T1, body: { is_active: false } });
+  const afterDisable = await api('GET', '/api/masters/dropdowns', { token: T3 });
+  check('disabled education level disappears from dropdowns', !afterDisable.data.educationLevels.some((e) => e.id === newEducationId));
+}
+
+// ───────────────────────────────── custom survey form fields (A1 form builder)
+section('Custom survey form fields (A1 form builder)');
+let newFieldId = null;
+{
+  const baseDrops = (await api('GET', '/api/masters/dropdowns', { token: T3 })).data;
+  const baseSector = baseDrops.sectors[0];
+  const baseFields = { casteId: baseDrops.castes[0].id, jobId: baseSector.jobs[0].id, partyId: baseDrops.parties[0].id };
+
+  const activeForA3 = await api('GET', '/api/form-fields', { token: T3 });
+  check('A3 can read the active custom field list', activeForA3.status === 200 && Array.isArray(activeForA3.data));
+
+  check('A2 cannot manage form fields (403)', (await api('GET', '/api/form-fields/all', { token: T2 })).status === 403);
+  check('A3 cannot manage form fields (403)', (await api('GET', '/api/form-fields/all', { token: T3 })).status === 403);
+
+  const mk = await api('POST', '/api/form-fields', { token: T1, body: { label: 'ZZ Ration Card ' + Date.now(), field_type: 'select', options: 'APL, BPL, Antyodaya', is_required: false } });
+  check('A1 creates a custom select field', mk.status === 201 && !!mk.data.id, JSON.stringify(mk.data).slice(0, 200));
+  newFieldId = mk.data?.id;
+  check('select field auto-generates a slug key', /^[a-z][a-z0-9_]*$/.test(mk.data.key ?? ''), mk.data.key);
+  check('select field carries its options', Array.isArray(mk.data.options) && mk.data.options.includes('APL'));
+
+  check('select field with no options rejected 400', (await api('POST', '/api/form-fields', { token: T1, body: { label: 'ZZ Bad Select', field_type: 'select', options: '' } })).status === 400);
+  check('unknown field type rejected 400', (await api('POST', '/api/form-fields', { token: T1, body: { label: 'ZZ Bad Type', field_type: 'checkbox' } })).status === 400);
+
+  const afterCreate = await api('GET', '/api/form-fields', { token: T3 });
+  check('new active field appears in the agent-facing field list', afterCreate.data.some((f) => f.id === newFieldId));
+
+  const patched = await api('PATCH', `/api/form-fields/${newFieldId}`, { token: T1, body: { is_required: true, label: 'ZZ Ration Card Updated' } });
+  check('A1 edits a custom field', patched.status === 200 && patched.data.isRequired === true);
+
+  const submitNoAnswer = await api('POST', '/api/voters/survey/submit', {
+    token: T3,
+    body: {
+      epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
+      phoneNumber: '9845012345', ...baseFields,
+    },
+  });
+  check('submitting without a required custom field answer is rejected 400', submitNoAnswer.status === 400);
+
+  const submitWithAnswer = await api('POST', '/api/voters/survey/submit', {
+    token: T3,
+    body: { epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
+      phoneNumber: '9845012345', ...baseFields,
+      customFields: { [newFieldId]: 'BPL' } },
+  });
+  check('submitting a valid custom field answer succeeds', submitWithAnswer.status === 200 && submitWithAnswer.data.ok, JSON.stringify(submitWithAnswer.data).slice(0, 200));
+
+  const submitBadOption = await api('POST', '/api/voters/survey/submit', {
+    token: T3,
+    body: { epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
+      phoneNumber: '9845012345', ...baseFields,
+      customFields: { [newFieldId]: 'NOT_A_VALID_OPTION' } },
+  });
+  check('submitting an out-of-list select answer is rejected 400', submitBadOption.status === 400);
+
+  const moved = await api('POST', `/api/form-fields/${newFieldId}/move`, { token: T1, body: { direction: 'up' } });
+  check('A1 reorders a custom field', moved.status === 200, `got ${moved.status}`);
+
+  const blockedDelete = await api('DELETE', `/api/form-fields/${newFieldId}`, { token: T1 });
+  check('deleting a field already answered by a survey is blocked', blockedDelete.status === 409, `got ${blockedDelete.status}`);
+
+  const disabled = await api('PATCH', `/api/form-fields/${newFieldId}`, { token: T1, body: { is_active: false } });
+  check('A1 disables a custom field instead of deleting it', disabled.status === 200 && disabled.data.isActive === false);
+  const afterDisable = await api('GET', '/api/form-fields', { token: T3 });
+  check('disabled custom field disappears from the agent-facing list', !afterDisable.data.some((f) => f.id === newFieldId));
+}
+
+// ───────────────────────────────── online / presence status
+section('Online presence status');
+{
+  const list1 = await api('GET', '/api/users/list', { token: T1 });
+  check('user rows carry an isOnline flag', list1.data.rows.every((u) => typeof u.isOnline === 'boolean'));
+  check('user rows carry a lastSeenAt timestamp field', list1.data.rows.every((u) => 'lastSeenAt' in u));
+
+  // T3 has just made several authenticated requests above, so it must be online now.
+  await api('GET', '/api/auth/me', { token: T3 });
+  const relisted = await api('GET', '/api/users/list', { token: T1 });
+  const a3Row = relisted.data.rows.find((u) => u.id === a3.data.user.id);
+  check('a recently active agent is reported online', a3Row?.isOnline === true, JSON.stringify(a3Row));
 }
 
 // ───────────────────────────────── user management
@@ -546,6 +674,9 @@ section('Sync outbox status (transactional outbox)');
 if (newCasteId) await api('DELETE', `/api/masters/caste/${newCasteId}`, { token: T1 });
 if (newJobId) await api('DELETE', `/api/masters/job/${newJobId}`, { token: T1 });
 if (newPartyId) await api('DELETE', `/api/masters/party/${newPartyId}`, { token: T1 });
+if (newEducationId) await api('DELETE', `/api/masters/education/${newEducationId}`, { token: T1 });
+// newFieldId is left disabled rather than deleted — it already has an answered
+// survey value attached, and the delete route correctly refuses that (tested above).
 
 console.log(`\n${'═'.repeat(60)}`);
 console.log(`  [32m${pass} passed[0m   ${fail ? `[31m${fail} failed[0m` : '0 failed'}`);

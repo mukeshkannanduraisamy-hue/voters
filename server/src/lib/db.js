@@ -89,7 +89,8 @@ export function migrate() {
       is_active      INTEGER DEFAULT 1,
       created_by     TEXT REFERENCES users(id) ON DELETE SET NULL,
       created_at     TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-      last_login_at  TEXT
+      last_login_at  TEXT,
+      last_seen_at   TEXT
     );
 
     -- Booth-level scope. A1 holds no rows here (global by role).
@@ -137,6 +138,41 @@ export function migrate() {
       created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
+    CREATE TABLE IF NOT EXISTS education_master (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL UNIQUE,
+      name_ta     TEXT,
+      is_active   INTEGER DEFAULT 1,
+      created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    -- ===================== CUSTOM SURVEY FIELDS (A1-managed form builder) =====
+    -- Field definitions an A1 can add/edit/reorder/disable without a code
+    -- change. "options_json" is only meaningful for field_type='select': a
+    -- JSON array of plain strings the agent picks from.
+    CREATE TABLE IF NOT EXISTS survey_field_defs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      field_key     TEXT NOT NULL UNIQUE,
+      label         TEXT NOT NULL,
+      label_ta      TEXT,
+      field_type    TEXT NOT NULL DEFAULT 'text' CHECK (field_type IN ('text','number','date','select')),
+      options_json  TEXT,
+      is_required   INTEGER NOT NULL DEFAULT 0,
+      sort_order    INTEGER NOT NULL DEFAULT 0,
+      is_active     INTEGER NOT NULL DEFAULT 1,
+      created_at    TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
+    -- One row per (survey, custom field) answer. Deleting the survey or the
+    -- field definition cleans up its answers automatically.
+    CREATE TABLE IF NOT EXISTS survey_field_values (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      epic_id    TEXT    NOT NULL REFERENCES voter_surveys(epic_id) ON DELETE CASCADE,
+      field_id   INTEGER NOT NULL REFERENCES survey_field_defs(id) ON DELETE CASCADE,
+      value      TEXT,
+      UNIQUE (epic_id, field_id)
+    );
+
     -- ===================== SURVEY RECORDS =====================
     -- One survey per elector: epic_id is the primary key, so a re-survey is an
     -- UPSERT rather than a duplicate row.
@@ -149,9 +185,11 @@ export function migrate() {
       caste_id                 INTEGER REFERENCES caste_master(id),
       job_id                   INTEGER REFERENCES job_master(id),
       party_id                 INTEGER REFERENCES party_master(id),
+      education_id             INTEGER REFERENCES education_master(id),
       other_job_text           TEXT,
       remarks                  TEXT,
       surveyed_by              TEXT REFERENCES users(id) ON DELETE SET NULL,
+      last_updated_by          TEXT REFERENCES users(id) ON DELETE SET NULL,
       surveyed_at              TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       updated_at               TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
@@ -181,7 +219,24 @@ export function migrate() {
     CREATE INDEX IF NOT EXISTS idx_uj_user      ON user_jurisdictions(user_id);
     CREATE INDEX IF NOT EXISTS idx_uj_part      ON user_jurisdictions(part_no);
     CREATE INDEX IF NOT EXISTS idx_audit_user   ON audit_log(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sfv_epic     ON survey_field_values(epic_id);
+    CREATE INDEX IF NOT EXISTS idx_sfv_field    ON survey_field_values(field_id);
+    CREATE INDEX IF NOT EXISTS idx_sfd_sort     ON survey_field_defs(sort_order);
   `);
+
+  // `CREATE TABLE IF NOT EXISTS` above only shapes a brand-new database — an
+  // existing users/voter_surveys table from before this feature set predates
+  // these columns and needs them added explicitly. SQLite has no
+  // "ADD COLUMN IF NOT EXISTS", so check PRAGMA table_info first.
+  ensureColumn('users', 'last_seen_at', 'TEXT');
+  ensureColumn('voter_surveys', 'education_id', 'INTEGER REFERENCES education_master(id)');
+  ensureColumn('voter_surveys', 'last_updated_by', 'TEXT REFERENCES users(id) ON DELETE SET NULL');
+}
+
+function ensureColumn(table, column, definition) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (existing.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 /** Refreshes planner statistics so scoped queries pick the right index. */

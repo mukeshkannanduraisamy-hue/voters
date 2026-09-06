@@ -277,7 +277,7 @@ export default function Dashboard() {
                           </td>
                           <td className="t-sm">
                             {a.partList.length
-                              ? <>Part {a.partList.slice(0, 4).join(', ')}{a.partList.length > 4 ? ` +${a.partList.length - 4}` : ''}</>
+                              ? <>Booth {a.partList.slice(0, 4).join(', ')}{a.partList.length > 4 ? ` +${a.partList.length - 4}` : ''}</>
                               : <span className="t-subtle">None</span>}
                             <div className="t-xs t-subtle tabnum">{fmt(a.assignedVoters)} electors</div>
                           </td>
@@ -318,7 +318,7 @@ export default function Dashboard() {
                   <div className="result-main">
                     <div className="result-name t-truncate ta">{r.nameTa}</div>
                     <div className="result-meta t-truncate">
-                      <span className="mono">{r.epicId}</span> · Part {r.partNo} · <span className="ta">{r.localBodyNameTa}</span>
+                      <span className="mono">{r.epicId}</span> · Booth {r.partNo} · <span className="ta">{r.localBodyNameTa}</span>
                     </div>
                   </div>
                   <div className="stack tight" style={{ alignItems: 'flex-end', gap: 4 }}>

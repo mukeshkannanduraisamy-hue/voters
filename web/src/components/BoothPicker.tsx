@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, Input, fmt } from './ui';
+import { Button, Input, MultiSelectDropdown, fmt } from './ui';
 import { LocalBodyBadge } from './spec-ui';
 import type { BoothTree } from '../lib/types';
 
@@ -34,9 +34,6 @@ export function BoothPicker({ tree, selected, onChange }: {
   const toggleBooth = (partNo: number) =>
     onChange(selectedSet.has(partNo) ? selected.filter((p) => p !== partNo) : [...selected, partNo]);
 
-  const toggleLocalBody = (name: string) =>
-    setLocalBodies((cur) => (cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name]));
-
   if (!tree) return <div className="t-sm t-muted">Loading booths…</div>;
   if (!tree.parts.length) {
     return <div className="t-sm t-muted">You have no booths assigned, so you cannot assign any.</div>;
@@ -45,6 +42,12 @@ export function BoothPicker({ tree, selected, onChange }: {
   const selectedVoters = tree.parts
     .filter((p) => selectedSet.has(p.part_no))
     .reduce((a, p) => a + p.voter_count, 0);
+
+  const localBodyOptions = tree.localBodies.map((lb) => ({
+    value: lb.name,
+    label: lb.name,
+    sub: `${lb.part_count} booth${lb.part_count === 1 ? '' : 's'}`,
+  }));
 
   return (
     <div className="stack tight">
@@ -62,31 +65,18 @@ export function BoothPicker({ tree, selected, onChange }: {
         </span>
       </div>
 
-      {/* ---- local body filter chips ---- */}
       <div className="picker">
-        <div className="picker-search">
-          <div className="t-xs t-muted t-bold mb-2" style={{ letterSpacing: '0.06em' }}>
-            LOCAL BODIES — TAP TO FILTER BOOTHS
+        <div className="picker-search row tight" style={{ flexWrap: 'nowrap' }}>
+          <div className="t-xs t-muted t-bold" style={{ letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+            LOCAL BODIES
           </div>
-          <div className="chips">
-            {tree.localBodies.map((lb) => (
-              <button
-                key={lb.name}
-                type="button"
-                className="chip"
-                style={{
-                  cursor: 'pointer',
-                  opacity: localBodies.length === 0 || localBodies.includes(lb.name) ? 1 : 0.45,
-                  paddingRight: 11,
-                }}
-                onClick={() => toggleLocalBody(lb.name)}
-                aria-pressed={localBodies.includes(lb.name)}
-              >
-                <span className="ta">{lb.name}</span>
-                <span className="t-xs">({lb.part_count})</span>
-              </button>
-            ))}
-          </div>
+          <MultiSelectDropdown
+            options={localBodyOptions}
+            selected={localBodies}
+            onChange={setLocalBodies}
+            placeholder="All local bodies — tap to filter booths"
+            searchPlaceholder="Search local body…"
+          />
         </div>
 
         {/* ---- booth checkboxes ---- */}
@@ -104,7 +94,7 @@ export function BoothPicker({ tree, selected, onChange }: {
               <label key={b.part_no} className={`picker-opt ${selectedSet.has(b.part_no) ? 'on' : ''}`}>
                 <input type="checkbox" checked={selectedSet.has(b.part_no)} onChange={() => toggleBooth(b.part_no)} />
                 <span className="t-truncate" style={{ minWidth: 0, flex: 1 }}>
-                  <strong>Part {b.part_no}</strong>
+                  <strong>Booth {b.part_no}</strong>
                   <span className="ta t-subtle t-xs"> · {b.local_body_name_ta}</span>
                 </span>
                 <LocalBodyBadge type={b.local_body_type} />

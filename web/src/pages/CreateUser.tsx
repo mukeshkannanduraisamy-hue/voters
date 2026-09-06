@@ -187,7 +187,7 @@ export default function CreateUser() {
                     <strong className="ta">✓ Verified: {verified.voter.nameTa}</strong>
                     <div className="t-sm mt-2">
                       {verified.voter.age} / <span className="ta">{verified.voter.gender}</span> ·
-                      Part {verified.voter.partNo} · <span className="ta">{verified.voter.localBodyNameTa}</span>
+                      Booth {verified.voter.partNo} · <span className="ta">{verified.voter.localBodyNameTa}</span>
                     </div>
                     <div className="t-xs mt-2 t-muted">{verified.voter.constituency}</div>
                   </div>

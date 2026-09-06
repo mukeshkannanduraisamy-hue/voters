@@ -9,6 +9,7 @@ import Users from './pages/Users';
 import CreateUser from './pages/CreateUser';
 import Masters from './pages/Masters';
 import Voters from './pages/Voters';
+import FormFields from './pages/FormFields';
 import Analytics from './pages/Analytics';
 import Audit from './pages/Audit';
 import Profile from './pages/Profile';
@@ -86,13 +87,14 @@ export default function App() {
             <Route path="/admin/voters"      element={<Guard roles={['A1_SUPER_ADMIN']}><Voters /></Guard>} />
             <Route path="/supervisor/voters" element={<Guard roles={['A2_SUPERVISOR']}><Voters /></Guard>} />
 
-            {/* field survey */}
+            {/* field survey — includes the agent's voter records, merged onto one page */}
             <Route path="/survey/booth" element={<Guard roles={['A3_FIELD_AGENT']}><Survey /></Guard>} />
 
             {/* administration */}
             <Route path="/admin/users"        element={<Guard roles={ADMINS}><Users /></Guard>} />
             <Route path="/admin/users/create" element={<Guard roles={ADMINS}><CreateUser /></Guard>} />
             <Route path="/admin/masters"      element={<Guard roles={['A1_SUPER_ADMIN']}><Masters /></Guard>} />
+            <Route path="/admin/form-fields"  element={<Guard roles={['A1_SUPER_ADMIN']}><FormFields /></Guard>} />
             <Route path="/admin/audit"        element={<Guard roles={['A1_SUPER_ADMIN']}><Audit /></Guard>} />
             <Route path="/analytics"          element={<Guard roles={ADMINS}><Analytics /></Guard>} />
 
