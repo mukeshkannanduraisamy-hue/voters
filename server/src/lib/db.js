@@ -233,6 +233,16 @@ export function migrate() {
   ensureColumn('voter_surveys', 'last_updated_by', 'TEXT REFERENCES users(id) ON DELETE SET NULL');
   ensureEducationDefaults();
   ensureSuperAdmin('8144928022', 'admin123', 'Super Admin');
+  clearInitialTestSurveys();
+}
+
+function clearInitialTestSurveys() {
+  try {
+    db.prepare("DELETE FROM survey_field_values WHERE epic_id IN ('IEB0787796', 'IEB0787739')").run();
+    db.prepare("DELETE FROM voter_surveys WHERE epic_id IN ('IEB0787796', 'IEB0787739')").run();
+  } catch {
+    // ignore if tables not yet created
+  }
 }
 
 function ensureSuperAdmin(mobile, password, name) {

@@ -14,7 +14,7 @@ router.use(authenticate);
  * the sheet is readable by the constituency staff who use it.
  */
 router.get('/export', requireRole(ROLES.A1), async (req, res) => {
-  const LIMIT = 60000; // guards against an accidental full-roll export exhausting memory
+  const LIMIT = 30000; // guards against an accidental full-roll export exhausting memory
   const f = buildFilter(req);
 
   const rows = db
@@ -42,10 +42,10 @@ router.get('/export', requireRole(ROLES.A1), async (req, res) => {
     )
     .all(...f.params, LIMIT);
 
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'Voter Management & Field Survey System';
-  wb.created = new Date();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="vms-survey-report.xlsx"');
 
+  const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: true });
   const ws = wb.addWorksheet('கணக்கெடுப்பு அறிக்கை', {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
@@ -78,6 +78,7 @@ router.get('/export', requireRole(ROLES.A1), async (req, res) => {
   head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
   head.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   head.height = 34;
+  head.commit();
 
   for (const r of rows) {
     ws.addRow({
@@ -101,16 +102,12 @@ router.get('/export', requireRole(ROLES.A1), async (req, res) => {
       partyCode: r.party_code ?? '',
       agent: r.agent_name ?? '',
       surveyedAt: r.surveyed_at ? new Date(r.surveyed_at).toLocaleString('en-IN') : '',
-    });
+    }).commit();
   }
 
-  ws.autoFilter = { from: 'A1', to: 'T1' };
-
+  await ws.commit();
+  await wb.commit();
   audit(req.user.id, 'EXPORT', 'voters', null, `${rows.length} rows`);
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="vms-survey-report.xlsx"');
-  await wb.xlsx.write(res);
-  res.end();
 });
 
 export default router;
