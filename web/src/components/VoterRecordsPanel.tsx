@@ -344,7 +344,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, drops, customFieldDef
             </Button>
           )}
           {isAgent && (
-            <Link className="btn btn-primary" to={`/survey/booth?epic=${encodeURIComponent(voter.epicId)}`}>
+            <Link className="btn btn-primary" to={`/survey/booth?epic=${encodeURIComponent(voter.epicId)}`} onClick={onClose}>
               <Icon name="clipboard" size={16} />{voter.surveyed ? 'Update survey' : 'Start survey'}
             </Link>
           )}
