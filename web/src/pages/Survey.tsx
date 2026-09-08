@@ -49,6 +49,7 @@ export default function Survey() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
+  const [pickingContact, setPickingContact] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
   /** Seeds the form from the roll, pre-filling any survey already collected. */
@@ -193,6 +194,81 @@ export default function Survey() {
     clearAll(); // "redirect to main page" — back to the search landing state
   };
 
+  /** Opens device Contacts app (Android / Chrome) to search and pick a phone number. */
+  const handlePickContact = async () => {
+    // 1. Native Web Contact Picker API (Chrome on Android)
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        setPickingContact(true);
+        let props = ['tel'];
+        if (typeof (navigator as any).contacts?.getProperties === 'function') {
+          const supported = await (navigator as any).contacts.getProperties();
+          props = ['tel', 'name'].filter((p) => supported.includes(p));
+          if (!props.includes('tel')) props.push('tel');
+        }
+        const contacts = await (navigator as any).contacts.select(props, { multiple: false });
+        if (contacts && contacts.length > 0) {
+          const c = contacts[0];
+          const rawTel = Array.isArray(c.tel) ? c.tel[0] : c.tel;
+          if (rawTel) {
+            let digits = String(rawTel).replace(/\D/g, '');
+            if (digits.length > 10 && (digits.startsWith('91') || digits.startsWith('0'))) {
+              digits = digits.slice(-10);
+            } else if (digits.length > 10) {
+              digits = digits.slice(-10);
+            }
+            if (digits.length === 10) {
+              set('phoneNumber', digits);
+              const cName = c.name ? (Array.isArray(c.name) ? c.name[0] : c.name) : '';
+              toast.ok('Contact imported', cName ? `${cName}: ${digits}` : digits);
+            } else if (digits.length > 0) {
+              set('phoneNumber', digits);
+              toast.warn('Check phone number', `Imported: ${digits} (please verify 10 digits)`);
+            } else {
+              toast.bad('No telephone digits', 'Selected contact has no numeric phone number.');
+            }
+          } else {
+            toast.bad('No telephone number', 'Selected contact has no telephone number.');
+          }
+        }
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.warn('Contact picker error:', err);
+          toast.bad('Could not open contacts', err?.message || 'Contact selection was interrupted.');
+        }
+      } finally {
+        setPickingContact(false);
+      }
+      return;
+    }
+
+    // 2. Clipboard fallback (if user copied from contacts or dialer)
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      try {
+        const text = await navigator.clipboard.readText();
+        let digits = text.replace(/\D/g, '');
+        if (digits.length > 10 && (digits.startsWith('91') || digits.startsWith('0'))) {
+          digits = digits.slice(-10);
+        } else if (digits.length > 10) {
+          digits = digits.slice(-10);
+        }
+        if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) {
+          set('phoneNumber', digits);
+          toast.ok('Number imported from clipboard', digits);
+          return;
+        }
+      } catch {
+        // Clipboard read permission denied or empty
+      }
+    }
+
+    // 3. Informational guidance for unsupported browsers/devices
+    toast.info(
+      'Device Contacts (தொடர்புகள்)',
+      'Contact picker directly opens your device Contacts app on Android Chrome. On other devices, copy the number from Contacts and paste here.'
+    );
+  };
+
   const boothLabel = user?.jurisdictions.length
     ? user.jurisdictions.length === 1
       ? `Booth #${user.jurisdictions[0].part_no} (${user.jurisdictions[0].local_body_name_ta})`
@@ -324,12 +400,27 @@ export default function Survey() {
                   <div>
                     <div className="section-tag"><span className="n">1</span> Voter phone number <span className="t-muted t-sm font-normal">(Optional)</span></div>
                     <Field error={errors.phoneNumber} hint="Optional — 10 digits starting with 6, 7, 8 or 9">
-                      <PhoneInput
-                        value={form.phoneNumber}
-                        onChange={(v) => set('phoneNumber', v)}
-                        placeholder="9840112233"
-                        invalid={!!errors.phoneNumber}
-                      />
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <PhoneInput
+                            value={form.phoneNumber}
+                            onChange={(v) => set('phoneNumber', v)}
+                            placeholder="9840112233"
+                            invalid={!!errors.phoneNumber}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          icon="phone"
+                          loading={pickingContact}
+                          onClick={() => void handlePickContact()}
+                          title="Search device contacts / தொடர்புகளிலிருந்து இறக்குமதி செய்க"
+                          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                        >
+                          <span>Contacts / தொடர்புகள்</span>
+                        </Button>
+                      </div>
                     </Field>
                   </div>
 
