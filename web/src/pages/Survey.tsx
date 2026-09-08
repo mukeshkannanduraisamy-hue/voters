@@ -329,38 +329,43 @@ export default function Survey() {
               <div className="card-body">
                 <div className="locked-grid">
                   <div className="locked-cell">
-                    <div className="locked-key">EPIC Number</div>
+                    <div className="locked-key">EPIC NUMBER</div>
                     <div className="locked-val mono">{voter.epicId}</div>
                   </div>
                   <div className="locked-cell">
-                    <div className="locked-key">Polling booth</div>
+                    <div className="locked-key">POLLING BOOTH</div>
                     <div className="locked-val">Booth {voter.partNo}</div>
                   </div>
-                  <div className="locked-cell span2">
-                    <div className="locked-key">Local body / Address</div>
+                  <div className="locked-cell">
+                    <div className="locked-key">LOCAL BODY / ADDRESS</div>
                     <div className="locked-val ta">
                       {voter.localBodyNameTa}
-                      {voter.doorNo && <span className="t-sm t-muted"> · Door {voter.doorNo}</span>}
+                      {voter.doorNo && <span className="t-sm t-muted font-normal"> · Door {voter.doorNo}</span>}
                     </div>
                   </div>
+                  <div className="locked-cell" />
                   <div className="locked-cell">
-                    <div className="locked-key">Serial no</div>
+                    <div className="locked-key">SERIAL NO</div>
                     <div className="locked-val">{voter.voterSno ?? '—'}</div>
                   </div>
                   <div className="locked-cell">
-                    <div className="locked-key">Age</div>
+                    <div className="locked-key">AGE</div>
                     <div className="locked-val">{voter.age ?? '—'}</div>
                   </div>
                   <div className="locked-cell">
-                    <div className="locked-key">Sex</div>
+                    <div className="locked-key">SEX</div>
                     <div className="locked-val ta">{voter.gender ?? '—'}</div>
                   </div>
                   <div className="locked-cell">
-                    <div className="locked-key">Roll name</div>
+                    <div className="locked-key">ROLL NAME</div>
                     <div className="locked-val ta">{voter.nameTa}</div>
                   </div>
                   <div className="locked-cell span2">
-                    <div className="locked-key">{voter.relationTypeTa ?? 'Relative'} name</div>
+                    <div className="locked-key">
+                      {voter.relationTypeTa
+                        ? (voter.relationTypeTa.includes('பெயர்') ? `${voter.relationTypeTa} NAME` : `${voter.relationTypeTa} பெயர் NAME`)
+                        : 'RELATIVE NAME'}
+                    </div>
                     <div className="locked-val ta">{voter.relativeNameTa ?? '—'}</div>
                   </div>
                 </div>
@@ -412,13 +417,14 @@ export default function Survey() {
                         <Button
                           type="button"
                           variant="secondary"
+                          size="sm"
                           icon="phone"
                           loading={pickingContact}
                           onClick={() => void handlePickContact()}
                           title="Search device contacts / தொடர்புகளிலிருந்து இறக்குமதி செய்க"
-                          style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                          className="btn-contact-pick"
                         >
-                          <span>Contacts / தொடர்புகள்</span>
+                          <span>Contacts / தொடர்பு</span>
                         </Button>
                       </div>
                     </Field>
