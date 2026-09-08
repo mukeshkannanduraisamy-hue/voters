@@ -14,11 +14,20 @@ const FORCE = process.argv.includes('--force');
 migrate();
 migrateOutbox(); // registers vms_uuid() for this process — see import-data.mjs for why
 
-/* ------------------------------- masters -------------------------------- */
+/*
+ * ------------------------------- masters ----------------------------------
+ * Every seed function below is purely additive: `ON CONFLICT DO NOTHING`, never
+ * `DO UPDATE`. This script is meant to be safe to re-run (e.g. `npm run seed`
+ * after pulling new sample data, or via `npm run reset`) without clobbering
+ * whatever an admin has since edited through the Master Data UI — an earlier
+ * version used `DO UPDATE`, which silently reverted any admin rename/edit back
+ * to these hardcoded defaults on every re-run, which is exactly the "I edited
+ * this and it reverted" bug this was rewritten to stop causing.
+ */
 function seedCastes() {
   const stmt = db.prepare(
     `INSERT INTO caste_master (name, name_ta, category, is_active) VALUES (?,?,?,1)
-     ON CONFLICT(name) DO UPDATE SET name_ta = excluded.name_ta, category = excluded.category`
+     ON CONFLICT(name) DO NOTHING`
   );
   for (const c of CASTES) stmt.run(c.name, c.name_ta, c.category);
   console.log(`  caste_master   ${db.prepare('SELECT COUNT(*) c FROM caste_master').get().c} rows`);
@@ -27,24 +36,16 @@ function seedCastes() {
 function seedEducation() {
   const stmt = db.prepare(
     `INSERT INTO education_master (name, name_ta, is_active) VALUES (?,?,1)
-     ON CONFLICT(name) DO UPDATE SET name_ta = excluded.name_ta, is_active = 1`
+     ON CONFLICT(name) DO NOTHING`
   );
   for (const e of EDUCATION_LEVELS) stmt.run(e.name, e.name_ta);
-
-  // Older seed revisions used coarser level names (e.g. plain "Primary");
-  // soft-hide any that survived here instead of deleting, since a survey may
-  // already reference one — is_active = 0 drops it from new dropdowns only.
-  const keep = EDUCATION_LEVELS.map((e) => e.name);
-  const placeholders = keep.map(() => '?').join(',');
-  db.prepare(`UPDATE education_master SET is_active = 0 WHERE name NOT IN (${placeholders})`).run(...keep);
-
   console.log(`  education_master ${db.prepare('SELECT COUNT(*) c FROM education_master WHERE is_active = 1').get().c} active rows`);
 }
 
 function seedJobs() {
   const stmt = db.prepare(
     `INSERT INTO job_master (category, category_ta, name, name_ta, is_active) VALUES (?,?,?,?,1)
-     ON CONFLICT(category, name) DO UPDATE SET name_ta = excluded.name_ta, category_ta = excluded.category_ta`
+     ON CONFLICT(category, name) DO NOTHING`
   );
   let n = 0;
   for (const sector of JOB_SECTORS) {
@@ -57,15 +58,10 @@ function seedJobs() {
 }
 
 function seedParties() {
-  // symbol_img is only written when empty, so an admin-uploaded emblem survives re-seeding.
   const stmt = db.prepare(
     `INSERT INTO party_master (name, name_ta, party_code, color_code, symbol_img, is_active)
      VALUES (?,?,?,?,?,1)
-     ON CONFLICT(name) DO UPDATE SET
-       name_ta    = excluded.name_ta,
-       party_code = excluded.party_code,
-       color_code = excluded.color_code,
-       symbol_img = COALESCE(NULLIF(party_master.symbol_img, ''), excluded.symbol_img)`
+     ON CONFLICT(name) DO NOTHING`
   );
   for (const p of PARTIES) stmt.run(p.name, p.name_ta, p.party_code, p.color_code, p.symbol_img);
   const withImg = db.prepare("SELECT COUNT(*) c FROM party_master WHERE symbol_img IS NOT NULL AND symbol_img <> ''").get().c;

@@ -1,7 +1,7 @@
 import express from 'express';
 import { db, nowIso } from '../lib/db.js';
 import {
-  authenticate, signToken, setAuthCookie, clearAuthCookie,
+  authenticate, authenticateOptional, signToken, setAuthCookie, clearAuthCookie,
   hashPassword, verifyPassword, audit,
   ROLE_LABELS, ROLE_LABELS_TA, HOME_FOR,
 } from '../lib/auth.js';
@@ -74,14 +74,21 @@ router.get('/me', authenticate, (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-/** POST /api/auth/logout — clears the session cookie */
-router.post('/logout', (req, res) => {
-  if (req.cookies?.vms_token) {
-    try {
-      const me = db.prepare('SELECT id FROM users WHERE id = ?').get(req.user?.id);
-      if (me) audit(me.id, 'LOGOUT', 'user', me.id, null);
-    } catch { /* logging out must always succeed */ }
-  }
+/**
+ * POST /api/auth/logout — clears the session cookie.
+ *
+ * Uses `authenticateOptional` rather than `authenticate`: logout must succeed
+ * even for an already-expired or invalid token, since that is exactly the
+ * state a client may call it from. When the token is still valid, `req.user`
+ * is populated and the logout is recorded in the audit log.
+ *
+ * (This used to reference `req.user` without any authentication middleware
+ * at all, so `req.user` was always undefined and the DB lookup below threw
+ * on every call — silently, since it was wrapped in a try/catch. Logout
+ * itself worked, but no LOGOUT event was ever recorded.)
+ */
+router.post('/logout', authenticateOptional, (req, res) => {
+  if (req.user) audit(req.user.id, 'LOGOUT', 'user', req.user.id, null);
   clearAuthCookie(res);
   res.json({ ok: true });
 });

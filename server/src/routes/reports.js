@@ -14,33 +14,36 @@ router.use(authenticate);
  * the sheet is readable by the constituency staff who use it.
  */
 router.get('/export', requireRole(ROLES.A1), async (req, res) => {
-  const LIMIT = 30000; // guards against an accidental full-roll export exhausting memory
   const f = buildFilter(req);
 
-  const rows = db
-    .prepare(
-      `SELECT v.epic_id, v.name_ta, v.relative_name_ta, v.relation_type_ta,
-              v.part_no, v.door_no, v.age, v.gender, v.voter_sno,
-              pp.local_body_name_ta, pp.local_body_type,
-              s.corrected_name_ta, s.corrected_relative_name_ta,
-              s.phone_number, s.other_job_text, s.surveyed_at,
-              cm.name AS caste_name, cm.name_ta AS caste_name_ta, cm.category AS caste_category,
-              jm.category AS job_category, jm.category_ta AS job_category_ta,
-              jm.name AS job_name, jm.name_ta AS job_name_ta,
-              pm.name AS party_name, pm.name_ta AS party_name_ta, pm.party_code,
-              u.full_name AS agent_name
-         FROM voters_master v
-         JOIN polling_parts pp ON pp.part_no = v.part_no
-         LEFT JOIN voter_surveys s ON s.epic_id = v.epic_id
-         LEFT JOIN caste_master cm ON cm.id = s.caste_id
-         LEFT JOIN job_master   jm ON jm.id = s.job_id
-         LEFT JOIN party_master pm ON pm.id = s.party_id
-         LEFT JOIN users u ON u.id = s.surveyed_by
-        WHERE ${f.sql}
-        ORDER BY v.part_no, v.voter_sno
-        LIMIT ?`
-    )
-    .all(...f.params, LIMIT);
+  // `.iterate()` streams rows one at a time straight from SQLite, so the full
+  // result set — up to the whole electoral roll, 200k+ rows — is never held
+  // in memory as a JS array. Paired with ExcelJS's streaming WorkbookWriter
+  // below, this is the only combination that lets a full-roll export finish
+  // without either exhausting memory or silently truncating the file (an
+  // earlier version capped this at a flat row count, which quietly dropped
+  // data on any export larger than the cap with no indication to the user).
+  const stmt = db.prepare(
+    `SELECT v.epic_id, v.name_ta, v.relative_name_ta, v.relation_type_ta,
+            v.part_no, v.door_no, v.age, v.gender, v.voter_sno,
+            pp.local_body_name_ta, pp.local_body_type,
+            s.corrected_name_ta, s.corrected_relative_name_ta,
+            s.phone_number, s.other_job_text, s.surveyed_at,
+            cm.name AS caste_name, cm.name_ta AS caste_name_ta, cm.category AS caste_category,
+            jm.category AS job_category, jm.category_ta AS job_category_ta,
+            jm.name AS job_name, jm.name_ta AS job_name_ta,
+            pm.name AS party_name, pm.name_ta AS party_name_ta, pm.party_code,
+            u.full_name AS agent_name
+       FROM voters_master v
+       JOIN polling_parts pp ON pp.part_no = v.part_no
+       LEFT JOIN voter_surveys s ON s.epic_id = v.epic_id
+       LEFT JOIN caste_master cm ON cm.id = s.caste_id
+       LEFT JOIN job_master   jm ON jm.id = s.job_id
+       LEFT JOIN party_master pm ON pm.id = s.party_id
+       LEFT JOIN users u ON u.id = s.surveyed_by
+      WHERE ${f.sql}
+      ORDER BY v.part_no, v.voter_sno`
+  );
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="vms-survey-report.xlsx"');
@@ -80,7 +83,8 @@ router.get('/export', requireRole(ROLES.A1), async (req, res) => {
   head.height = 34;
   head.commit();
 
-  for (const r of rows) {
+  let count = 0;
+  for (const r of stmt.iterate(...f.params)) {
     ws.addRow({
       epic: r.epic_id,
       name: r.name_ta,
@@ -103,11 +107,12 @@ router.get('/export', requireRole(ROLES.A1), async (req, res) => {
       agent: r.agent_name ?? '',
       surveyedAt: r.surveyed_at ? new Date(r.surveyed_at).toLocaleString('en-IN') : '',
     }).commit();
+    count++;
   }
 
   await ws.commit();
   await wb.commit();
-  audit(req.user.id, 'EXPORT', 'voters', null, `${rows.length} rows`);
+  audit(req.user.id, 'EXPORT', 'voters', null, `${count} rows`);
 });
 
 export default router;

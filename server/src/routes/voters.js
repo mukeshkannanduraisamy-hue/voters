@@ -420,8 +420,16 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, r
   });
 });
 
-/** DELETE /api/voters/surveys/all — A1 only, clears all survey records */
+/**
+ * DELETE /api/voters/surveys/all — A1 only, irreversibly wipes every survey
+ * record in the constituency. Not linked from any UI; exists for a deliberate
+ * data reset between demos/tests. Requires an explicit confirmation phrase in
+ * the body so a stray or scripted call can never trigger it by accident.
+ */
 router.delete('/surveys/all', requireRole(ROLES.A1), (req, res) => {
+  if (req.body?.confirm !== 'DELETE ALL SURVEYS') {
+    return res.status(400).json({ error: 'Send { "confirm": "DELETE ALL SURVEYS" } to proceed. This cannot be undone.' });
+  }
   db.exec('DELETE FROM survey_field_values');
   const info = db.prepare('DELETE FROM voter_surveys').run();
   db.exec("DELETE FROM sync_outbox WHERE table_name = 'voter_surveys' OR table_name = 'survey_field_values'");

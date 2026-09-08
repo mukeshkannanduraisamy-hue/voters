@@ -5,7 +5,7 @@ export type IconName =
   | 'chart' | 'settings' | 'logout' | 'menu' | 'x' | 'check' | 'check-circle' | 'alert'
   | 'info' | 'chevron-left' | 'chevron-right' | 'chevron-down' | 'lock' | 'edit' | 'trash'
   | 'download' | 'refresh' | 'sun' | 'moon' | 'phone' | 'map-pin' | 'inbox' | 'shield'
-  | 'trending-up' | 'clock' | 'filter' | 'save' | 'plus' | 'eye' | 'list' | 'activity'
+  | 'trending-up' | 'clock' | 'filter' | 'save' | 'plus' | 'eye' | 'eye-off' | 'list' | 'activity'
   | 'vote' | 'target' | 'key' | 'ban' | 'arrow-left'
   | 'monitor' | 'tablet' | 'smartphone' | 'upload' | 'image' | 'folder' | 'grid'
   | 'briefcase' | 'flag' | 'layers' | 'sort';
@@ -47,6 +47,7 @@ const PATHS: Record<IconName, string> = {
   save: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8',
   plus: 'M12 5v14M5 12h14',
   eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  'eye-off': 'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22',
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
   vote: 'M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z',

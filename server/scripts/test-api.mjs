@@ -91,6 +91,15 @@ const T1 = a1.data.token, T2 = a2.data.token, T3 = a3.data.token, T3B = a3b.data
 
   const out = await api('POST', '/api/auth/logout', { token: T1 });
   check('logout clears the cookie', out.status === 200 && /vms_token=;|Expires=Thu, 01 Jan 1970/i.test(out.headers.get('set-cookie') ?? ''));
+
+  check('logout succeeds with no token at all', (await api('POST', '/api/auth/logout')).status === 200);
+  check('logout succeeds with a junk token', (await api('POST', '/api/auth/logout', { token: 'not-a-jwt' })).status === 200);
+
+  // Logout doesn't revoke the JWT itself (it only clears the cookie client-side),
+  // so T1 is still a valid bearer token here — usable to check that the logout
+  // just above actually got recorded in the audit log.
+  const auditAfterLogout = await api('GET', '/api/dashboard/audit?limit=5', { token: T1 });
+  check('logout is recorded in the audit log', auditAfterLogout.data.some((e) => e.action === 'LOGOUT'));
 }
 
 // ───────────────────────────────── booths / scope

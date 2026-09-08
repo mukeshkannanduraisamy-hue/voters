@@ -74,45 +74,64 @@ export function clearAuthCookie(res) {
 }
 
 /**
- * Reads the session from the cookie, falling back to a bearer header so the
+ * Resolves the session from the cookie, falling back to a bearer header so the
  * API stays scriptable for tooling and tests.
  *
  * The user row is re-read on every request, so disabling an account or changing
- * its role takes effect immediately rather than at token expiry.
+ * its role takes effect immediately rather than at token expiry. Returns a
+ * `{ user }` or `{ error, status }` result rather than writing to `res` itself,
+ * so both the strict and optional middleware below can share this logic.
  */
-export function authenticate(req, res, next) {
+function resolveSession(req) {
   const header = req.headers.authorization || '';
   const token = req.cookies?.[COOKIE_NAME]
     || (header.startsWith('Bearer ') ? header.slice(7) : null);
 
-  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  if (!token) return { error: 'Authentication required', status: 401 };
 
   let payload;
   try {
     payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
   } catch (err) {
     const expired = err.name === 'TokenExpiredError';
-    clearAuthCookie(res);
-    return res.status(401).json({
-      error: expired ? 'Session expired, please sign in again' : 'Invalid session token',
-    });
+    return { error: expired ? 'Session expired, please sign in again' : 'Invalid session token', status: 401, clearCookie: true };
   }
 
   const user = db
     .prepare('SELECT id, mobile_number, role, epic_id, full_name, is_active FROM users WHERE id = ?')
     .get(payload.sub);
 
-  if (!user) {
-    clearAuthCookie(res);
-    return res.status(401).json({ error: 'Account no longer exists' });
-  }
+  if (!user) return { error: 'Account no longer exists', status: 401, clearCookie: true };
   if (!user.is_active) {
-    clearAuthCookie(res);
-    return res.status(403).json({ error: 'This account has been disabled. Please contact the Super Admin.' });
+    return { error: 'This account has been disabled. Please contact the Super Admin.', status: 403, clearCookie: true };
   }
 
-  req.user = user;
-  touchLastSeen(user.id);
+  return { user };
+}
+
+/** Requires a valid session; rejects the request with 401/403 when there isn't one. */
+export function authenticate(req, res, next) {
+  const result = resolveSession(req);
+  if (result.error) {
+    if (result.clearCookie) clearAuthCookie(res);
+    return res.status(result.status).json({ error: result.error });
+  }
+  req.user = result.user;
+  touchLastSeen(result.user.id);
+  next();
+}
+
+/**
+ * Identifies the caller when possible but never rejects the request — for
+ * endpoints like logout that must succeed even with a missing/expired token,
+ * while still recording who it was when the session was actually valid.
+ */
+export function authenticateOptional(req, res, next) {
+  const result = resolveSession(req);
+  if (result.user) {
+    req.user = result.user;
+    touchLastSeen(result.user.id);
+  }
   next();
 }
 

@@ -145,7 +145,7 @@ export default function Login() {
                     padding: 6, display: 'grid', placeItems: 'center',
                   }}
                 >
-                  <Icon name={showPw ? 'ban' : 'eye'} size={16} />
+                  <Icon name={showPw ? 'eye-off' : 'eye'} size={16} />
                 </button>
               </div>
             </Field>

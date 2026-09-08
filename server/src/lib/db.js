@@ -194,6 +194,16 @@ export function migrate() {
       updated_at               TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
     );
 
+    -- Tiny key/value store for one-time bootstrap flags (e.g. "have the
+    -- default education levels been seeded yet"). Without a durable flag like
+    -- this, a check such as "is the table currently empty" is indistinguishable
+    -- from "an admin deliberately deleted every row", and re-seeding on that
+    -- basis silently undoes real admin edits on the next server restart.
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS audit_log (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id    TEXT,
@@ -233,16 +243,6 @@ export function migrate() {
   ensureColumn('voter_surveys', 'last_updated_by', 'TEXT REFERENCES users(id) ON DELETE SET NULL');
   ensureEducationDefaults();
   ensureSuperAdmin('8144928022', 'admin123', 'Super Admin');
-  clearInitialTestSurveys();
-}
-
-function clearInitialTestSurveys() {
-  try {
-    db.prepare("DELETE FROM survey_field_values WHERE epic_id IN ('IEB0787796', 'IEB0787739')").run();
-    db.prepare("DELETE FROM voter_surveys WHERE epic_id IN ('IEB0787796', 'IEB0787739')").run();
-  } catch {
-    // ignore if tables not yet created
-  }
 }
 
 function ensureSuperAdmin(mobile, password, name) {
@@ -273,14 +273,27 @@ const DEFAULT_EDUCATION = [
   ['Not Disclosed', 'தெரிவிக்கவில்லை'],
 ];
 
+/**
+ * Seeds the default education levels exactly once, ever — gated on a durable
+ * flag in `app_meta`, not on "is the table currently empty right now".
+ *
+ * The previous version checked the live row count: if an admin deleted every
+ * education level on purpose, the count would read 0 again, and the very next
+ * server restart (a crash, a redeploy, a host waking from idle-sleep — nothing
+ * the admin did) would silently re-insert all 12 defaults, making a deliberate
+ * deletion look like it "reverted after some time". A one-time flag makes the
+ * seed truly one-time: it runs on a genuinely fresh database and never again,
+ * so any later admin edit or deletion sticks.
+ */
 function ensureEducationDefaults() {
-  const c = db.prepare('SELECT COUNT(*) c FROM education_master').get().c;
-  if (c === 0) {
-    const insert = db.prepare('INSERT INTO education_master (name, name_ta, is_active) VALUES (?, ?, 1) ON CONFLICT(name) DO NOTHING');
-    for (const [name, nameTa] of DEFAULT_EDUCATION) {
-      insert.run(name, nameTa);
-    }
+  const already = db.prepare("SELECT 1 FROM app_meta WHERE key = 'education_defaults_seeded'").get();
+  if (already) return;
+
+  const insert = db.prepare('INSERT INTO education_master (name, name_ta, is_active) VALUES (?, ?, 1) ON CONFLICT(name) DO NOTHING');
+  for (const [name, nameTa] of DEFAULT_EDUCATION) {
+    insert.run(name, nameTa);
   }
+  db.prepare("INSERT INTO app_meta (key, value) VALUES ('education_defaults_seeded', datetime('now'))").run();
 }
 
 function ensureColumn(table, column, definition) {
