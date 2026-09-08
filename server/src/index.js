@@ -97,7 +97,10 @@ if (fs.existsSync(webDist)) {
 app.use((err, req, res, next) => {
   console.error('[api error]', req.method, req.originalUrl, err);
   if (res.headersSent) return next(err);
-  res.status(500).json({ error: 'Something went wrong on the server', detail: err.message });
+  res.status(500).json({
+    error: 'Something went wrong on the server',
+    detail: err?.message || err?.code || String(err),
+  });
 });
 
 app.listen(PORT, async () => {

@@ -21,6 +21,7 @@ export const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
   dateStrings: true,
+  ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
 });
 
 const VMS_TABLES = [
