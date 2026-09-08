@@ -905,7 +905,7 @@ function LocalBodyMaster() {
   const [data, setData] = useState<LocalBodyList | null>(null);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
-  const [merging, setMerging] = useState<{ from: string; into: string } | null>(null);
+  const [merging, setMerging] = useState<{ from: string[]; into: string } | null>(null);
   const [renaming, setRenaming] = useState<LocalBodyRow | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -916,11 +916,26 @@ function LocalBodyMaster() {
   };
   useEffect(() => { void load(); }, []);
 
-  const doMerge = async (from: string, into: string) => {
+  /**
+   * Runs one or more merges as a single batch, closing the confirm modal(s)
+   * only once every merge in the batch has actually finished.
+   *
+   * A cluster of 3+ spellings needs several merge calls into the same target,
+   * one per source name. The previous version ran those sequentially but
+   * closed the confirm modal (`setMerging(null)`) after the *first* call
+   * returned — so merges 2, 3, ... kept happening silently in the background
+   * with the dialog already gone and no busy indicator, and a failure on any
+   * merge after the first was never surfaced (the loop just moved on). This
+   * keeps the modal open and `busy` true for the whole batch, and stops at
+   * the first failure so the admin sees exactly what happened and what's left.
+   */
+  const runMerges = async (pairs: { from: string; into: string }[]) => {
     setBusy(true);
     try {
-      const res = await api.post<{ boothsMoved: number }>('/api/masters/local-bodies/merge', { from, into });
-      toast.ok('Merged', `${fmt(res.boothsMoved)} booth${res.boothsMoved === 1 ? '' : 's'} moved from "${from}" to "${into}"`);
+      for (const { from, into } of pairs) {
+        const res = await api.post<{ boothsMoved: number }>('/api/masters/local-bodies/merge', { from, into });
+        toast.ok('Merged', `${fmt(res.boothsMoved)} booth${res.boothsMoved === 1 ? '' : 's'} moved from "${from}" to "${into}"`);
+      }
       setMerging(null);
       setRenaming(null);
       await load();
@@ -978,7 +993,7 @@ function LocalBodyMaster() {
                       </div>
                       <Button
                         size="sm" variant="primary" icon="check"
-                        onClick={() => setMerging({ from: s.candidates.filter((c) => c.name !== s.recommended).map((c) => c.name).join(', '), into: s.recommended })}
+                        onClick={() => setMerging({ from: s.candidates.filter((c) => c.name !== s.recommended).map((c) => c.name), into: s.recommended })}
                       >
                         Merge all into "{s.recommended}"
                       </Button>
@@ -1042,7 +1057,7 @@ function LocalBodyMaster() {
         busy={busy}
         message={
           <>
-            Every booth currently named <strong className="ta">{merging?.from}</strong> will be renamed to{' '}
+            Every booth currently named <strong className="ta">{merging?.from.join(', ')}</strong> will be renamed to{' '}
             <strong className="ta">{merging?.into}</strong>. Booths themselves, their electors and every
             survey record are unaffected — only the display name changes.
           </>
@@ -1051,9 +1066,8 @@ function LocalBodyMaster() {
         onConfirm={() => {
           if (!merging) return;
           // The suggestion card can bundle several source names into one confirm;
-          // apply them one at a time against the same target.
-          const sources = merging.from.split(', ');
-          (async () => { for (const s of sources) await doMerge(s, merging.into); })();
+          // apply them one at a time against the same target, as a single batch.
+          void runMerges(merging.from.map((from) => ({ from, into: merging.into })));
         }}
       />
 
@@ -1063,7 +1077,7 @@ function LocalBodyMaster() {
           existingNames={(data?.rows ?? []).map((r) => r.name).filter((n) => n !== renaming.name)}
           busy={busy}
           onCancel={() => setRenaming(null)}
-          onConfirm={(target) => void doMerge(renaming.name, target)}
+          onConfirm={(target) => void runMerges([{ from: renaming.name, into: target }])}
         />
       )}
     </>

@@ -506,23 +506,23 @@ function EditSurveyModal({ voter, drops, customFieldDefs, onCancel, onSaved }: {
             <Input className="ta" value={correctedRelativeNameTa} onChange={(e) => setCorrectedRelativeNameTa(e.target.value)} />
           </Field>
         </div>
-        <Field label="Phone number" required error={errors.phoneNumber}>
+        <Field label="Phone number" hint="Optional" error={errors.phoneNumber}>
           <PhoneInput value={phoneNumber} onChange={setPhoneNumber} invalid={!!errors.phoneNumber} />
         </Field>
-        <Field label="Caste / community" required error={errors.casteId}>
+        <Field label="Caste / community" hint="Optional" error={errors.casteId}>
           <Select value={casteId} onChange={(e) => setCasteId(e.target.value)} invalid={!!errors.casteId}>
             <option value="">Select caste…</option>
             {drops?.castes.map((c) => <option key={c.id} value={c.id}>{c.category} — {c.name}{c.name_ta ? ` / ${c.name_ta}` : ''}</option>)}
           </Select>
         </Field>
         <div className="grid cols-2">
-          <Field label="Occupation sector" required error={errors.sector}>
+          <Field label="Occupation sector" hint="Optional" error={errors.sector}>
             <Select value={sector} onChange={(e) => onSectorChange(e.target.value)} invalid={!!errors.sector}>
               <option value="">Select sector…</option>
               {drops?.sectors.map((sec) => <option key={sec.category} value={sec.category}>{sec.category}</option>)}
             </Select>
           </Field>
-          <Field label="Specific sub-job" required error={errors.jobId}>
+          <Field label="Specific sub-job" hint="Optional" error={errors.jobId}>
             <Select value={jobId} onChange={(e) => setJobId(e.target.value)} disabled={!sector} invalid={!!errors.jobId}>
               <option value="">Select sub-job…</option>
               {subJobs.map((j) => <option key={j.id} value={j.id}>{j.name_ta ? `${j.name_ta} (${j.name})` : j.name}</option>)}
@@ -535,7 +535,7 @@ function EditSurveyModal({ voter, drops, customFieldDefs, onCancel, onSaved }: {
             {drops?.educationLevels.map((ed) => <option key={ed.id} value={ed.id}>{ed.name_ta ? `${ed.name_ta} (${ed.name})` : ed.name}</option>)}
           </Select>
         </Field>
-        <Field label="Political leaning" required error={errors.partyId}>
+        <Field label="Political leaning" hint="Optional" error={errors.partyId}>
           {drops ? <PartyGrid parties={drops.parties} value={partyId} onChange={setPartyId} /> : <div className="t-sm t-muted">Loading…</div>}
         </Field>
         {customFieldDefs.length > 0 && (

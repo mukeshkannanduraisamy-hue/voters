@@ -300,12 +300,9 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, r
 
   const fields = {};
   if (!epic) fields.epicId = 'EPIC number is required';
-  if (!PHONE_RE.test(phone)) fields.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
-  if (!casteId) fields.casteId = 'Select a caste';
-  if (!jobId) fields.jobId = 'Select an occupation';
-  if (!partyId) fields.partyId = 'Select a party';
+  if (phone && !PHONE_RE.test(phone)) fields.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
   if (Object.keys(fields).length) {
-    return res.status(400).json({ error: 'Please complete all required fields', fields });
+    return res.status(400).json({ error: 'Please correct the invalid fields', fields });
   }
 
   const scope = buildPartFilter(req.user, 'v');
@@ -327,7 +324,7 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, r
     ['job_master', jobId, 'jobId', 'occupation'],
     ['party_master', partyId, 'partyId', 'party'],
   ]) {
-    if (!db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND is_active = 1`).get(id)) {
+    if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND is_active = 1`).get(id)) {
       return res.status(422).json({ error: `Selected ${label} is no longer available`, fields: { [field]: 'Unavailable' } });
     }
   }
@@ -388,7 +385,7 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, r
          last_updated_by = excluded.last_updated_by,
          updated_at = excluded.updated_at`
     ).run(
-      voter.epic_id, correctedName, correctedRelative, phone,
+      voter.epic_id, correctedName, correctedRelative, phone || '',
       casteId, jobId, partyId, educationId, otherJobText, remarks,
       surveyedBy, req.user.id, now, now
     );

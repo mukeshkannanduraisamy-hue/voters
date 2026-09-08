@@ -137,11 +137,9 @@ export default function Survey() {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!/^[6-9]\d{9}$/.test(form.phoneNumber.trim())) e.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
-    if (!form.casteId) e.casteId = 'Select a caste';
-    if (!form.sector) e.sector = 'Select a main sector';
-    if (!form.jobId) e.jobId = 'Select a specific sub-job';
-    if (!form.partyId) e.partyId = 'Select a political leaning';
+    if (form.phoneNumber.trim() && !/^[6-9]\d{9}$/.test(form.phoneNumber.trim())) {
+      e.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
+    }
     for (const def of customFieldDefs) {
       if (def.isRequired && !form.customFields[def.id]?.trim()) {
         e[`custom_${def.id}`] = `${def.label} is required`;
@@ -155,7 +153,7 @@ export default function Survey() {
     ev.preventDefault();
     setSaveError('');
     if (!voter) return;
-    if (!validate()) { setSaveError('Please complete all required fields before saving.'); return; }
+    if (!validate()) { setSaveError('Please correct the invalid fields before saving.'); return; }
 
     setSaving(true);
     try {
@@ -164,9 +162,9 @@ export default function Survey() {
         correctedNameTa: form.correctedNameTa.trim(),
         correctedRelativeNameTa: form.correctedRelativeNameTa.trim(),
         phoneNumber: form.phoneNumber.trim(),
-        casteId: Number(form.casteId),
-        jobId: Number(form.jobId),
-        partyId: form.partyId,
+        casteId: form.casteId ? Number(form.casteId) : null,
+        jobId: form.jobId ? Number(form.jobId) : null,
+        partyId: form.partyId ?? null,
         educationId: form.educationId ? Number(form.educationId) : null,
         otherJobText: form.otherJobText.trim(),
         remarks: form.remarks.trim(),
@@ -318,14 +316,14 @@ export default function Survey() {
 
             {/* ---- Section C: collected intelligence ---- */}
             <Card className={customFieldDefs.length ? 'mb-4' : ''}>
-              <CardHead title="Section C · Survey intelligence" sub="All fields below are required" icon="clipboard" />
+              <CardHead title="Section C · Survey intelligence" sub="All fields below are optional" icon="clipboard" />
               <div className="card-body">
                 {saveError && <div className="mb-4"><Alert tone="bad">{saveError}</Alert></div>}
 
                 <div className="stack">
                   <div>
-                    <div className="section-tag"><span className="n">1</span> Voter phone number</div>
-                    <Field required error={errors.phoneNumber} hint="10 digits, starting with 6, 7, 8 or 9">
+                    <div className="section-tag"><span className="n">1</span> Voter phone number <span className="t-muted t-sm font-normal">(Optional)</span></div>
+                    <Field error={errors.phoneNumber} hint="Optional — 10 digits starting with 6, 7, 8 or 9">
                       <PhoneInput
                         value={form.phoneNumber}
                         onChange={(v) => set('phoneNumber', v)}
@@ -336,8 +334,8 @@ export default function Survey() {
                   </div>
 
                   <div>
-                    <div className="section-tag"><span className="n">2</span> Caste / community</div>
-                    <Field required error={errors.casteId}>
+                    <div className="section-tag"><span className="n">2</span> Caste / community <span className="t-muted t-sm font-normal">(Optional)</span></div>
+                    <Field error={errors.casteId}>
                       <Select value={form.casteId} onChange={(e) => set('casteId', e.target.value)} invalid={!!errors.casteId}>
                         <option value="">Select caste…</option>
                         {drops?.castes.map((c) => (
@@ -350,9 +348,9 @@ export default function Survey() {
                   </div>
 
                   <div>
-                    <div className="section-tag"><span className="n">3</span> Occupation (2-tier)</div>
+                    <div className="section-tag"><span className="n">3</span> Occupation (2-tier) <span className="t-muted t-sm font-normal">(Optional)</span></div>
                     <div className="grid cols-2">
-                      <Field label="Main sector" required error={errors.sector}>
+                      <Field label="Main sector" error={errors.sector}>
                         <Select value={form.sector} onChange={(e) => onSectorChange(e.target.value)} invalid={!!errors.sector}>
                           <option value="">Select sector…</option>
                           {drops?.sectors.map((s) => (
@@ -363,7 +361,7 @@ export default function Survey() {
                         </Select>
                       </Field>
                       <Field
-                        label="Specific sub-job" required error={errors.jobId}
+                        label="Specific sub-job" error={errors.jobId}
                         hint={form.sector ? undefined : 'Choose a sector first'}
                       >
                         <Select
@@ -393,7 +391,7 @@ export default function Survey() {
                   </div>
 
                   <div>
-                    <div className="section-tag"><span className="n">4</span> Political leaning</div>
+                    <div className="section-tag"><span className="n">4</span> Political leaning <span className="t-muted t-sm font-normal">(Optional)</span></div>
                     {errors.partyId && <div className="mb-2"><span className="error-text">{errors.partyId}</span></div>}
                     {drops
                       ? <PartyGrid parties={drops.parties} value={form.partyId} onChange={(id) => set('partyId', id)} />

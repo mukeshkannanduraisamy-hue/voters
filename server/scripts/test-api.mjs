@@ -354,9 +354,10 @@ section('Field survey submission (A3)');
     const r = await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, phoneNumber: phone } });
     check(`phone regex rejects ${label}`, r.status === 400 && !!r.data?.fields?.phoneNumber);
   }
-  check('missing caste rejected 400', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, casteId: null } })).status === 400);
-  check('missing job rejected 400', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, jobId: null } })).status === 400);
-  check('missing party rejected 400', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, partyId: null } })).status === 400);
+  check('caste is optional (succeeds with null)', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, casteId: null } })).status === 200);
+  check('job is optional (succeeds with null)', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, jobId: null } })).status === 200);
+  check('party is optional (succeeds with null)', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, partyId: null } })).status === 200);
+  check('phone is optional (succeeds with empty string)', (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, phoneNumber: '' } })).status === 200);
 
   check('A3 cannot survey outside its booths (403)',
     (await api('POST', '/api/voters/survey/submit', { token: T3, body: { ...valid, epicId: outsideEpic } })).status === 403);

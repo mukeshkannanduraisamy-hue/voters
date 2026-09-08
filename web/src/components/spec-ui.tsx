@@ -57,7 +57,7 @@ export function PartyGrid({ parties, value, onChange }: {
           aria-checked={value === p.id}
           className={`party-card ${value === p.id ? 'on' : ''}`}
           style={{ ['--party-color' as string]: p.color_code }}
-          onClick={() => onChange(p.id)}
+          onClick={() => onChange(value === p.id ? null : p.id)}
           title={p.name_ta ?? p.name}
         >
           <PartySymbol party={p} size={44} />
