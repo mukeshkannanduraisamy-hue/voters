@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../lib/api';
 import type {
-  CasteCategory, CasteRow, EducationRow, JobRow, JobSectorGroup, LocalBodyList, LocalBodyRow, PartyRow,
+  CasteRow, EducationRow, JobRow, JobSectorGroup, LocalBodyList, LocalBodyRow, PartyRow,
 } from '../lib/types';
 import {
   Alert, Badge, Button, Card, CardHead, ConfirmModal, Empty, Field, Input, Modal, PageHead,
@@ -11,17 +11,6 @@ import { ImageUploader, LocalBodyBadge, PartySymbol } from '../components/spec-u
 import { Icon } from '../components/icons';
 
 type Tab = 'caste' | 'job' | 'party' | 'education' | 'local-body';
-
-const CATEGORIES: CasteCategory[] = ['OC', 'BC', 'BCM', 'MBC', 'SC', 'ST', 'OTHER'];
-const CATEGORY_LABEL: Record<CasteCategory, string> = {
-  OC: 'OC — Open Competition',
-  BC: 'BC — Backward Class',
-  BCM: 'BCM — BC Muslim',
-  MBC: 'MBC — Most Backward Class',
-  SC: 'SC — Scheduled Caste',
-  ST: 'ST — Scheduled Tribe',
-  OTHER: 'Other / Not Disclosed',
-};
 
 export default function Masters() {
   const [tab, setTab] = useState<Tab>('caste');
@@ -64,7 +53,6 @@ function EducationMaster() {
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const [name, setName] = useState('');
-  const [nameTa, setNameTa] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
 
@@ -82,9 +70,9 @@ function EducationMaster() {
     if (name.trim().length < 2) { setAddError('Enter at least 2 characters.'); return; }
     setAdding(true);
     try {
-      await api.post('/api/masters/education', { name: name.trim(), name_ta: nameTa.trim() });
+      await api.post('/api/masters/education', { name: name.trim() });
       toast.ok('Education level added', name.trim());
-      setName(''); setNameTa('');
+      setName('');
       await load();
     } catch (err) {
       setAddError(err instanceof ApiError ? err.message : 'Could not add the entry');
@@ -113,7 +101,7 @@ function EducationMaster() {
   };
 
   const filtered = (rows ?? []).filter((r) =>
-    !q.trim() || r.name.toLowerCase().includes(q.toLowerCase()) || (r.name_ta ?? '').includes(q)
+    !q.trim() || r.name.toLowerCase().includes(q.toLowerCase())
   );
 
   return (
@@ -123,14 +111,9 @@ function EducationMaster() {
         <div className="card-body">
           <form onSubmit={add}>
             <div className="row" style={{ alignItems: 'flex-end' }}>
-              <div style={{ flex: '1 1 220px' }}>
-                <Field label="Education level (English)" required error={addError}>
+              <div style={{ flex: '1 1 320px' }}>
+                <Field label="Education level" error={addError}>
                   <Input value={name} onChange={(e) => { setName(e.target.value); setAddError(''); }} placeholder="e.g. Higher Secondary" invalid={!!addError} maxLength={100} />
-                </Field>
-              </div>
-              <div style={{ flex: '1 1 220px' }}>
-                <Field label="Education level (Tamil)">
-                  <Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} placeholder="மேல்நிலைக் கல்வி" maxLength={100} />
                 </Field>
               </div>
               <Button type="submit" variant="primary" icon="save" loading={adding}>Save</Button>
@@ -169,7 +152,6 @@ function EducationMaster() {
                       <td><span className="rank">{i + 1}</span></td>
                       <td>
                         <div className="t-semi">{r.name}</div>
-                        {r.name_ta && <div className="t-sm ta t-muted">{r.name_ta}</div>}
                       </td>
                       <td>{r.is_active ? <Badge tone="ok" dot>Active</Badge> : <Badge tone="muted" dot>Disabled</Badge>}</td>
                       <td className="num tabnum">{r.usage_count ? <Badge tone="ok">{fmt(r.usage_count)}</Badge> : <span className="t-subtle">—</span>}</td>
@@ -208,7 +190,6 @@ function EducationMaster() {
 function EditEducationModal({ row, onClose, onSaved }: { row: EducationRow; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [name, setName] = useState(row.name);
-  const [nameTa, setNameTa] = useState(row.name_ta ?? '');
   const [active, setActive] = useState(row.is_active);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -218,7 +199,7 @@ function EditEducationModal({ row, onClose, onSaved }: { row: EducationRow; onCl
     if (name.trim().length < 2) { setError('Name must be at least 2 characters.'); return; }
     setSaving(true);
     try {
-      await api.patch(`/api/masters/education/${row.id}`, { name: name.trim(), name_ta: nameTa.trim(), is_active: active });
+      await api.patch(`/api/masters/education/${row.id}`, { name: name.trim(), is_active: active });
       toast.ok('Education level updated', name.trim());
       onSaved();
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not save changes'); }
@@ -231,8 +212,7 @@ function EditEducationModal({ row, onClose, onSaved }: { row: EducationRow; onCl
         <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>Save changes</Button></>}>
       {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
       <div className="stack">
-        <Field label="Education level (English)" required><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
-        <Field label="Education level (Tamil)"><Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} /></Field>
+        <Field label="Education level"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
         <Field label="Status"><Switch checked={active} onChange={setActive} label={active ? 'Active — shown to agents' : 'Disabled — hidden'} /></Field>
         {!!row.usage_count && <Alert tone="info">Used by <strong>{fmt(row.usage_count)}</strong> survey record(s).</Alert>}
       </div>
@@ -252,7 +232,6 @@ function CasteMaster() {
 
   const [name, setName] = useState('');
   const [nameTa, setNameTa] = useState('');
-  const [category, setCategory] = useState<CasteCategory>('BC');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
 
@@ -270,9 +249,9 @@ function CasteMaster() {
     if (name.trim().length < 2) { setAddError('Enter at least 2 characters.'); return; }
     setAdding(true);
     try {
-      await api.post('/api/masters/caste', { name: name.trim(), name_ta: nameTa.trim(), category });
+      await api.post('/api/masters/caste', { name: name.trim(), name_ta: nameTa.trim() });
       toast.ok('Caste added', name.trim());
-      setName(''); setNameTa(''); setCategory('BC');
+      setName(''); setNameTa('');
       await load();
     } catch (err) {
       setAddError(err instanceof ApiError ? err.message : 'Could not add the entry');
@@ -311,21 +290,14 @@ function CasteMaster() {
         <div className="card-body">
           <form onSubmit={add}>
             <div className="row" style={{ alignItems: 'flex-end' }}>
-              <div style={{ flex: '1 1 190px' }}>
-                <Field label="Caste name (English)" required error={addError}>
+              <div style={{ flex: '1 1 240px' }}>
+                <Field label="Caste name (English)" error={addError}>
                   <Input value={name} onChange={(e) => { setName(e.target.value); setAddError(''); }} placeholder="e.g. Vanniyar" invalid={!!addError} maxLength={100} />
                 </Field>
               </div>
-              <div style={{ flex: '1 1 170px' }}>
+              <div style={{ flex: '1 1 240px' }}>
                 <Field label="Caste name (Tamil)">
                   <Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} placeholder="வன்னியர்" maxLength={100} />
-                </Field>
-              </div>
-              <div style={{ flex: '1 1 200px' }}>
-                <Field label="Reservation category" required>
-                  <Select value={category} onChange={(e) => setCategory(e.target.value as CasteCategory)}>
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-                  </Select>
                 </Field>
               </div>
               <Button type="submit" variant="primary" icon="save" loading={adding}>Save Caste</Button>
@@ -343,7 +315,7 @@ function CasteMaster() {
         />
         <div className="card-body flush">
           {error && <div style={{ padding: 'var(--sp-4)' }}><Alert tone="bad">{error}</Alert></div>}
-          {!rows ? <TableSkeleton rows={6} cols={5} /> : filtered.length === 0 ? (
+          {!rows ? <TableSkeleton rows={6} cols={4} /> : filtered.length === 0 ? (
             <Empty icon="database" title="No caste options found" />
           ) : (
             <div className="table-wrap">
@@ -352,7 +324,6 @@ function CasteMaster() {
                   <tr>
                     <th style={{ width: 52 }}>#</th>
                     <th>Caste title</th>
-                    <th>Reservation category</th>
                     <th className="num">Used by</th>
                     <th>Created</th>
                     <th style={{ width: 190 }}>Actions</th>
@@ -366,7 +337,6 @@ function CasteMaster() {
                         <div className="t-semi">{r.name}</div>
                         {r.name_ta && <div className="t-sm ta t-muted">{r.name_ta}</div>}
                       </td>
-                      <td><Badge tone="brand">{r.category}</Badge></td>
                       <td className="num tabnum">{r.usage_count ? <Badge tone="ok">{fmt(r.usage_count)}</Badge> : <span className="t-subtle">—</span>}</td>
                       <td className="t-sm t-muted">{fmtDate(r.created_at)}</td>
                       <td>
@@ -404,7 +374,6 @@ function EditCasteModal({ row, onClose, onSaved }: { row: CasteRow; onClose: () 
   const toast = useToast();
   const [name, setName] = useState(row.name);
   const [nameTa, setNameTa] = useState(row.name_ta ?? '');
-  const [category, setCategory] = useState<CasteCategory>(row.category);
   const [active, setActive] = useState(row.is_active);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -414,7 +383,7 @@ function EditCasteModal({ row, onClose, onSaved }: { row: CasteRow; onClose: () 
     if (name.trim().length < 2) { setError('Name must be at least 2 characters.'); return; }
     setSaving(true);
     try {
-      await api.patch(`/api/masters/caste/${row.id}`, { name: name.trim(), name_ta: nameTa.trim(), category, is_active: active });
+      await api.patch(`/api/masters/caste/${row.id}`, { name: name.trim(), name_ta: nameTa.trim(), is_active: active });
       toast.ok('Caste updated', name.trim());
       onSaved();
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not save changes'); }
@@ -427,13 +396,8 @@ function EditCasteModal({ row, onClose, onSaved }: { row: CasteRow; onClose: () 
         <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>Save changes</Button></>}>
       {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
       <div className="stack">
-        <Field label="Caste name (English)" required><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+        <Field label="Caste name (English)"><Input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
         <Field label="Caste name (Tamil)"><Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} /></Field>
-        <Field label="Reservation category" required>
-          <Select value={category} onChange={(e) => setCategory(e.target.value as CasteCategory)}>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-          </Select>
-        </Field>
         <Field label="Status"><Switch checked={active} onChange={setActive} label={active ? 'Active — shown to agents' : 'Disabled — hidden'} /></Field>
         {!!row.usage_count && <Alert tone="info">Used by <strong>{fmt(row.usage_count)}</strong> survey record(s).</Alert>}
       </div>
@@ -655,7 +619,7 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
         <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>{isNew ? 'Add sub-job' : 'Save changes'}</Button></>}>
       {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
       <div className="stack">
-        <Field label="1. Main sector" required hint="Pick an existing sector, or switch to enter a new one">
+        <Field label="1. Main sector" hint="Pick an existing sector, or switch to enter a new one">
           {useCustom ? (
             <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Transport & Logistics" autoFocus />
           ) : (
@@ -675,7 +639,7 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
           </Field>
         )}
 
-        <Field label="2. Sub-job title (English)" required>
+        <Field label="2. Sub-job title (English)">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Silk Weaver" />
         </Field>
         <Field label="Sub-job title (Tamil)">
@@ -851,10 +815,10 @@ function EditPartyModal({ row, onClose, onSaved }: { row: PartyRow | null; onClo
       {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
       <div className="stack">
         <div className="grid cols-2">
-          <Field label="Party name (English)" required error={fields.name}>
+          <Field label="Party name (English)" error={fields.name}>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. DMK" invalid={!!fields.name} autoFocus />
           </Field>
-          <Field label="Party code" required error={fields.party_code} hint="Short abbreviation shown on cards">
+          <Field label="Party code" error={fields.party_code} hint="Short abbreviation shown on cards">
             <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="DMK" maxLength={12} invalid={!!fields.party_code} className="mono" />
           </Field>
         </div>
@@ -863,7 +827,7 @@ function EditPartyModal({ row, onClose, onSaved }: { row: PartyRow | null; onClo
           <Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} placeholder="திராவிட முன்னேற்றக் கழகம்" />
         </Field>
 
-        <Field label="Flag / branding colour" required error={fields.color_code}>
+        <Field label="Flag / branding colour" error={fields.color_code}>
           <div className="row tight">
             <input
               type="color" value={color} onChange={(e) => setColor(e.target.value)}
@@ -1113,7 +1077,7 @@ function RenameLocalBodyModal({ row, existingNames, busy, onCancel, onConfirm }:
           {fmt(row.part_count)} booth{row.part_count === 1 ? '' : 's'} · {fmt(row.voter_count)} electors are
           currently under this name.
         </div>
-        <Field label="Correct spelling" required hint="Type the name exactly as it should read everywhere">
+        <Field label="Correct spelling" hint="Type the name exactly as it should read everywhere">
           <Input className="ta" value={target} onChange={(e) => setTarget(e.target.value)} list="local-body-names" autoFocus />
           <datalist id="local-body-names">
             {existingNames.map((n) => <option key={n} value={n} />)}

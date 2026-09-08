@@ -81,13 +81,11 @@ router.post('/caste', requireRole(ROLES.A1), async (req, res, next) => {
   try {
     const name = String(req.body?.name ?? '').trim();
     const nameTa = String(req.body?.name_ta ?? '').trim() || null;
-    const category = String(req.body?.category ?? 'BC').trim().toUpperCase();
+    const rawCategory = String(req.body?.category ?? 'OTHER').trim().toUpperCase();
+    const category = CASTE_CATEGORIES.includes(rawCategory) ? rawCategory : 'OTHER';
     const isActive = req.body?.is_active === false ? 0 : 1;
 
     if (name.length < 2) return res.status(400).json({ error: 'Caste name must be at least 2 characters', fields: { name: 'Too short' } });
-    if (!CASTE_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: `Category must be one of ${CASTE_CATEGORIES.join(', ')}`, fields: { category: 'Invalid' } });
-    }
     const existing = await db.prepare('SELECT 1 FROM caste_master WHERE name = ? COLLATE NOCASE').get(name);
     if (existing) {
       return res.status(409).json({ error: `"${name}" already exists`, fields: { name: 'Already exists' } });
@@ -122,8 +120,8 @@ router.patch('/caste/:id', requireRole(ROLES.A1), async (req, res, next) => {
     }
     if (req.body?.name_ta !== undefined) { sets.push('name_ta = ?'); params.push(String(req.body.name_ta).trim() || null); }
     if (req.body?.category !== undefined) {
-      const category = String(req.body.category).trim().toUpperCase();
-      if (!CASTE_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Invalid reservation category', fields: { category: 'Invalid' } });
+      const rawCategory = String(req.body.category).trim().toUpperCase();
+      const category = CASTE_CATEGORIES.includes(rawCategory) ? rawCategory : 'OTHER';
       sets.push('category = ?'); params.push(category);
     }
     if (req.body?.is_active !== undefined) { sets.push('is_active = ?'); params.push(req.body.is_active ? 1 : 0); }
