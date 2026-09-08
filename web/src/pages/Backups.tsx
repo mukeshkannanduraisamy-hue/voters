@@ -5,17 +5,35 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/icons';
 
+interface NextBackupInfo {
+  nextSlot: string;
+  nextTime: string;
+  minutesUntilNext: number;
+  countdown: string;
+  dailySlots: string[];
+}
+
 interface BackupItem {
   filename: string;
   sizeBytes: number;
   sizeFormatted: string;
   createdAt: string;
+  createdTimeFormatted: string;
+  createdDateFormatted: string;
   createdFormatted: string;
+  timeAgo: string;
+  slot: string;
+  triggerType: string;
+  packUpDurationSeconds?: number | null;
+  totalRowsDumped?: number | null;
   expiresAt: string;
+  expiresTimeFormatted: string;
+  expiresDateFormatted: string;
   expiresAtFormatted: string;
   remainingMs: number;
   remainingHours: number;
   remainingLabel: string;
+  elapsedPercent: number;
   retentionDays: number;
 }
 
@@ -23,11 +41,13 @@ interface BackupsResponse {
   success: boolean;
   total: number;
   schedule: string;
+  nextBackup?: NextBackupInfo;
   backups: BackupItem[];
 }
 
 export default function Backups() {
   const [backups, setBackups] = useState<BackupItem[] | null>(null);
+  const [nextBackup, setNextBackup] = useState<NextBackupInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -42,6 +62,7 @@ export default function Backups() {
     try {
       const data = await api.get<BackupsResponse>('/api/admin/backups');
       setBackups(data.backups || []);
+      if (data.nextBackup) setNextBackup(data.nextBackup);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load database backups');
     } finally {
@@ -102,6 +123,8 @@ export default function Backups() {
       (b) =>
         b.filename.toLowerCase().includes(needle) ||
         b.createdFormatted.toLowerCase().includes(needle) ||
+        (b.createdTimeFormatted && b.createdTimeFormatted.toLowerCase().includes(needle)) ||
+        (b.slot && b.slot.toLowerCase().includes(needle)) ||
         b.expiresAtFormatted.toLowerCase().includes(needle)
     );
   }, [backups, q]);
@@ -160,14 +183,18 @@ export default function Backups() {
         <Card>
           <div style={{ padding: 'var(--sp-4)' }}>
             <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span className="t-xs t-muted t-upper t-bold">Daily Frequency</span>
+              <span className="t-xs t-muted t-upper t-bold">Daily 3x Automation</span>
               <span style={{ color: 'var(--emerald-500)' }}><Icon name="clock" size={20} /></span>
             </div>
             <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 700, marginTop: 'var(--sp-2)' }}>
               3 Times / Day
             </div>
             <div className="t-xs t-muted mt-1">
-              Scheduled at: <strong>08:00 AM</strong>, <strong>02:00 PM</strong>, <strong>09:00 PM IST</strong>
+              {nextBackup ? (
+                <span>Next: <strong style={{ color: 'var(--brand-600)' }}>{nextBackup.nextTime}</strong> ({nextBackup.countdown})</span>
+              ) : (
+                <span>Scheduled: <strong>08:00 AM</strong>, <strong>02:00 PM</strong>, <strong>09:00 PM IST</strong></span>
+              )}
             </div>
           </div>
         </Card>
@@ -182,7 +209,7 @@ export default function Backups() {
               3 Days (72 Hours)
             </div>
             <div className="t-xs t-muted mt-1">
-              Files older than 3 days are automatically purged from disk
+              Files older than 72 hours from backup time are automatically deleted
             </div>
           </div>
         </Card>
@@ -191,12 +218,12 @@ export default function Backups() {
       {/* Backups Table */}
       <Card>
         <CardHead
-          title="Backup Snapshots"
-          subtitle="All database dumps contain complete DDL schemas, voters roll (245k electors), surveys, users, and masters."
+          title="Backup Snapshots & Timeline"
+          subtitle="Complete database dumps with exact backup time, time elapsed, pack-up speed, and auto-delete countdowns."
           actions={
             <div className="cluster" style={{ minWidth: 260 }}>
               <Input
-                placeholder="Search backups by name or date…"
+                placeholder="Search backups by time, name, slot…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -205,7 +232,7 @@ export default function Backups() {
         />
 
         {loading && !backups ? (
-          <TableSkeleton cols={5} rows={4} />
+          <TableSkeleton cols={6} rows={4} />
         ) : !filtered.length ? (
           <Empty
             icon="database"
@@ -222,8 +249,9 @@ export default function Backups() {
               <thead>
                 <tr>
                   <th>Backup File & Size</th>
-                  <th>Created At (IST)</th>
-                  <th>Scheduled Deletion Time</th>
+                  <th>Backup Time (IST)</th>
+                  <th>Time Passed (From Backup)</th>
+                  <th>Scheduled Deletion (3 Days)</th>
                   <th>Retention Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -236,34 +264,77 @@ export default function Backups() {
                   return (
                     <tr key={b.filename}>
                       <td>
-                        <div className="stack" style={{ gap: '2px' }}>
+                        <div className="stack" style={{ gap: '4px' }}>
                           <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 'var(--fs-xs)' }}>
                             {b.filename}
                           </span>
-                          <span className="t-xs t-muted">
-                            Size: <Badge tone="brand">{b.sizeFormatted}</Badge>
+                          <div className="cluster" style={{ gap: '6px' }}>
+                            <Badge tone="brand">{b.sizeFormatted}</Badge>
+                            {b.packUpDurationSeconds && (
+                              <Badge tone="neutral">⚡ Packed in {b.packUpDurationSeconds}s</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="stack" style={{ gap: '3px' }}>
+                          <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--brand-700)' }}>
+                            {b.createdTimeFormatted || b.createdFormatted}
                           </span>
+                          <span className="t-xs t-muted">{b.createdDateFormatted || 'Asia/Kolkata (IST)'}</span>
+                          <Badge tone="neutral" style={{ width: 'fit-content' }}>
+                            {b.slot || 'Automated Snapshot'}
+                          </Badge>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="stack" style={{ gap: '3px' }}>
+                          <Badge tone="neutral" style={{ width: 'fit-content' }}>
+                            <Icon name="clock" size={12} />
+                            <span style={{ fontWeight: 600 }}>{b.timeAgo || 'Just now'}</span>
+                          </Badge>
+                          <span className="t-xs t-muted">Elapsed from backup</span>
                         </div>
                       </td>
                       <td>
                         <div className="stack" style={{ gap: '2px' }}>
-                          <span style={{ fontWeight: 500 }}>{b.createdFormatted}</span>
-                          <span className="t-xs t-muted">Asia/Kolkata (IST)</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="stack" style={{ gap: '2px' }}>
-                          <span style={{ fontWeight: 500, color: isExpiringSoon ? 'var(--red-600)' : undefined }}>
-                            {b.expiresAtFormatted}
+                          <span style={{ fontWeight: 600, color: isExpiringSoon ? 'var(--red-600)' : undefined }}>
+                            {b.expiresTimeFormatted ? `${b.expiresTimeFormatted}` : b.expiresAtFormatted}
                           </span>
-                          <span className="t-xs t-muted">Exact Auto-Delete Time</span>
+                          <span className="t-xs t-muted">{b.expiresDateFormatted || b.expiresAtFormatted} (72h limit)</span>
                         </div>
                       </td>
                       <td>
-                        <Badge tone={isExpiringSoon ? 'bad' : isModerate ? 'warn' : 'ok'}>
-                          <Icon name="clock" size={12} />
-                          <span>{b.remainingLabel}</span>
-                        </Badge>
+                        <div className="stack" style={{ gap: '4px', minWidth: 140 }}>
+                          <Badge tone={isExpiringSoon ? 'bad' : isModerate ? 'warn' : 'ok'}>
+                            <Icon name="clock" size={12} />
+                            <span>{b.remainingLabel}</span>
+                          </Badge>
+                          <div
+                            style={{
+                              width: '100%',
+                              height: 6,
+                              background: 'var(--slate-200)',
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${Math.min(100, Math.max(0, b.elapsedPercent || 0))}%`,
+                                height: '100%',
+                                background: isExpiringSoon
+                                  ? 'var(--red-500)'
+                                  : isModerate
+                                  ? 'var(--amber-500)'
+                                  : 'var(--brand-500)',
+                              }}
+                            />
+                          </div>
+                          <span className="t-xs t-muted" style={{ fontSize: '11px' }}>
+                            {b.elapsedPercent}% of 72h passed
+                          </span>
+                        </div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div className="cluster" style={{ justifyContent: 'flex-end', gap: 'var(--sp-2)' }}>

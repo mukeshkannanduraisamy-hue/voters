@@ -29,7 +29,7 @@ export function startBackupScheduler() {
           lastRunDate = dateKey;
           lastRunHour = hour;
           console.log(`[backupScheduler] Triggering scheduled backup for ${hour}:00 IST...`);
-          await createDatabaseBackup();
+          await createDatabaseBackup({ triggerType: 'scheduler' });
         }
       }
     } catch (err) {

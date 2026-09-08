@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { authenticate, requireRole, ROLES } from '../lib/auth.js';
-import { createDatabaseBackup, listBackups, ensureBackupsDir } from '../lib/backup.js';
+import { createDatabaseBackup, listBackups, deleteBackup, getNextBackupInfo, ensureBackupsDir } from '../lib/backup.js';
 
 const router = express.Router();
 const CRON_SECRET = process.env.CRON_SECRET || 'vms-cron-secret-2026';
@@ -11,10 +11,12 @@ const CRON_SECRET = process.env.CRON_SECRET || 'vms-cron-secret-2026';
 router.get('/api/admin/backups', authenticate, requireRole(ROLES.A1), (req, res) => {
   try {
     const backups = listBackups();
+    const nextBackup = getNextBackupInfo();
     res.json({
       success: true,
       total: backups.length,
       schedule: 'Daily 3 times (08:00 AM, 02:00 PM, 09:00 PM IST)',
+      nextBackup,
       backups
     });
   } catch (err) {
@@ -50,7 +52,7 @@ router.get('/api/admin/backups/download/:filename', authenticate, requireRole(RO
 // 3. Trigger an instant manual backup snapshot (A1 Super Admin only)
 router.post('/api/admin/backups/trigger', authenticate, requireRole(ROLES.A1), async (req, res) => {
   try {
-    const result = await createDatabaseBackup();
+    const result = await createDatabaseBackup({ triggerType: 'manual' });
     res.json({
       success: true,
       message: 'Backup created successfully',
@@ -76,7 +78,7 @@ router.delete('/api/admin/backups/:filename', authenticate, requireRole(ROLES.A1
       return res.status(404).json({ error: 'Backup file not found' });
     }
 
-    fs.unlinkSync(filepath);
+    deleteBackup(filename);
     console.log(`[backup] Manually deleted backup: ${filename}`);
     res.json({
       success: true,
@@ -97,7 +99,7 @@ router.get('/api/internal/backup-cron', async (req, res) => {
     }
 
     console.log('[cron] External backup cron triggered...');
-    const result = await createDatabaseBackup();
+    const result = await createDatabaseBackup({ triggerType: 'cron' });
     res.json({
       success: true,
       message: 'Automated 3x daily backup completed successfully',
