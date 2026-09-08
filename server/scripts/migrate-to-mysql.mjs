@@ -9,9 +9,9 @@ const DB_PATH = process.env.VMS_DB_PATH || path.resolve(__dirname, '../../data/v
 const DB_CONFIG = {
   host: process.env.DB_HOST || 'srv1497.hstgr.io',
   port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'u403881955_ecl_admin',
-  password: process.env.DB_PASSWORD || 'ECLAdmin@2026',
-  database: process.env.DB_NAME || 'u403881955_ECL',
+  user: process.env.DB_USER || 'u403881955_vms_admin',
+  password: process.env.DB_PASSWORD || 'VmsAdmin#2026Secure',
+  database: process.env.DB_NAME || 'u403881955_vms',
 };
 
 const ISO_RE = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?Z?$/;

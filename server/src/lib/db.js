@@ -3,9 +3,9 @@ import crypto from 'node:crypto';
 
 export const DB_HOST = process.env.DB_HOST || 'srv1497.hstgr.io';
 export const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10);
-export const DB_USER = process.env.DB_USER || 'u403881955_ecl_admin';
-export const DB_PASSWORD = process.env.DB_PASSWORD || 'ECLAdmin@2026';
-export const DB_NAME = process.env.DB_NAME || 'u403881955_ECL';
+export const DB_USER = process.env.DB_USER || 'u403881955_vms_admin';
+export const DB_PASSWORD = process.env.DB_PASSWORD || 'VmsAdmin#2026Secure';
+export const DB_NAME = process.env.DB_NAME || 'u403881955_vms';
 
 export const pool = mysql.createPool({
   host: DB_HOST,
