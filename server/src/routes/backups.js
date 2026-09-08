@@ -61,7 +61,34 @@ router.post('/api/admin/backups/trigger', authenticate, requireRole(ROLES.A1), a
   }
 });
 
-// 4. External cron endpoint (Secured with CRON_SECRET key)
+// 4. Manually delete a backup file (A1 Super Admin only)
+router.delete('/api/admin/backups/:filename', authenticate, requireRole(ROLES.A1), (req, res) => {
+  try {
+    const { filename } = req.params;
+    if (!filename || !filename.startsWith('vms_backup_') || !filename.endsWith('.sql.gz') || filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid backup filename' });
+    }
+
+    const dir = ensureBackupsDir();
+    const filepath = path.join(dir, filename);
+
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: 'Backup file not found' });
+    }
+
+    fs.unlinkSync(filepath);
+    console.log(`[backup] Manually deleted backup: ${filename}`);
+    res.json({
+      success: true,
+      message: `Backup ${filename} deleted successfully`,
+      filename
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete backup', detail: err.message });
+  }
+});
+
+// 5. External cron endpoint (Secured with CRON_SECRET key)
 router.get('/api/internal/backup-cron', async (req, res) => {
   try {
     const key = req.query.key || req.headers['x-cron-key'];

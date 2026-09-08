@@ -12,6 +12,7 @@ import Voters from './pages/Voters';
 import FormFields from './pages/FormFields';
 import Analytics from './pages/Analytics';
 import Audit from './pages/Audit';
+import Backups from './pages/Backups';
 import Profile from './pages/Profile';
 import type { Role } from './lib/types';
 import { Icon } from './components/icons';
@@ -96,6 +97,7 @@ export default function App() {
             <Route path="/admin/masters"      element={<Guard roles={['A1_SUPER_ADMIN']}><Masters /></Guard>} />
             <Route path="/admin/form-fields"  element={<Guard roles={['A1_SUPER_ADMIN']}><FormFields /></Guard>} />
             <Route path="/admin/audit"        element={<Guard roles={['A1_SUPER_ADMIN']}><Audit /></Guard>} />
+            <Route path="/admin/backups"      element={<Guard roles={['A1_SUPER_ADMIN']}><Backups /></Guard>} />
             <Route path="/analytics"          element={<Guard roles={ADMINS}><Analytics /></Guard>} />
 
             <Route path="/profile" element={<Guard roles={ALL}><Profile /></Guard>} />

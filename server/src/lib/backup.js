@@ -131,7 +131,8 @@ export async function createDatabaseBackup(options = {}) {
 
     console.log(`[backup] Backup completed successfully in ${duration}s! Size: ${sizeMb} MB (${stats.size} bytes)`);
 
-    pruneOldBackups(90);
+    // Prune backups older than 3 days
+    pruneExpiredBackups(3);
 
     return {
       success: true,
@@ -151,39 +152,86 @@ export async function createDatabaseBackup(options = {}) {
   }
 }
 
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+function formatIST(date) {
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }).format(date);
+}
+
+function getRemainingLabel(remainingMs) {
+  if (remainingMs <= 0) return 'Expiring now';
+  const totalMins = Math.floor(remainingMs / (60 * 1000));
+  const days = Math.floor(totalMins / (24 * 60));
+  const hours = Math.floor((totalMins % (24 * 60)) / 60);
+  const mins = totalMins % 60;
+  if (days > 0) return `${days}d ${hours}h remaining`;
+  if (hours > 0) return `${hours}h ${mins}m remaining`;
+  return `${mins}m remaining`;
+}
+
 export function listBackups() {
+  pruneExpiredBackups(3);
+
   const dir = ensureBackupsDir();
   if (!fs.existsSync(dir)) return [];
   const files = fs.readdirSync(dir).filter(f => f.startsWith('vms_backup_') && f.endsWith('.sql.gz'));
-  
+  const now = Date.now();
+
   return files.map(filename => {
     const full = path.join(dir, filename);
     const stats = fs.statSync(full);
+    const createdDate = new Date(stats.birthtime || stats.mtime);
+    const createdMs = createdDate.getTime();
+    const expiresMs = createdMs + THREE_DAYS_MS;
+    const expiresDate = new Date(expiresMs);
+    const remainingMs = Math.max(0, expiresMs - now);
+
     return {
       filename,
       sizeBytes: stats.size,
       sizeFormatted: `${(stats.size / (1024 * 1024)).toFixed(2)} MB`,
-      createdAt: stats.birthtime.toISOString(),
-      modifiedAt: stats.mtime.toISOString(),
+      createdAt: createdDate.toISOString(),
+      createdFormatted: formatIST(createdDate),
+      expiresAt: expiresDate.toISOString(),
+      expiresAtFormatted: formatIST(expiresDate),
+      remainingMs,
+      remainingHours: Math.round(remainingMs / (3600 * 1000)),
+      remainingLabel: getRemainingLabel(remainingMs),
+      retentionDays: 3,
     };
   }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
-export function pruneOldBackups(maxKeep = 90) {
+export function pruneExpiredBackups(retentionDays = 3) {
   try {
     const dir = ensureBackupsDir();
-    const files = listBackups();
-    if (files.length > maxKeep) {
-      const toDelete = files.slice(maxKeep);
-      for (const item of toDelete) {
-        const fullPath = path.join(dir, item.filename);
-        if (fs.existsSync(fullPath)) {
-          fs.unlinkSync(fullPath);
-          console.log(`[backup] Pruned old backup: ${item.filename}`);
-        }
+    if (!fs.existsSync(dir)) return;
+    const files = fs.readdirSync(dir).filter(f => f.startsWith('vms_backup_') && f.endsWith('.sql.gz'));
+    const maxAgeMs = retentionDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    for (const filename of files) {
+      const fullPath = path.join(dir, filename);
+      const stats = fs.statSync(fullPath);
+      const fileTime = new Date(stats.birthtime || stats.mtime).getTime();
+      const ageMs = now - fileTime;
+
+      if (ageMs > maxAgeMs) {
+        fs.unlinkSync(fullPath);
+        console.log(`[backup] Auto-deleted expired backup (>3 days old): ${filename}`);
       }
     }
   } catch (e) {
-    console.warn('[backup] Error pruning old backups:', e.message);
+    console.warn('[backup] Error pruning expired backups:', e.message);
   }
 }
+

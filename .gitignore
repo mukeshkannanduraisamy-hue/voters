@@ -9,3 +9,5 @@ data/*.db.zip
 ~$*
 tsconfig.tsbuildinfo
 *.xlsx
+backups/*.sql.gz
+backups/
