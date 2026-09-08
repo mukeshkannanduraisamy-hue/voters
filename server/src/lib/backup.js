@@ -187,6 +187,7 @@ export async function createDatabaseBackup(options = {}) {
     const [tableRows] = await pool.query("SHOW TABLES LIKE 'vms_%'");
     const tables = tableRows.map(r => Object.values(r)[0]);
 
+    let totalDumpedRows = 0;
     const conn = await pool.getConnection();
     try {
       for (const table of tables) {
@@ -211,6 +212,7 @@ export async function createDatabaseBackup(options = {}) {
           if (!cols) cols = Object.keys(row);
           batch.push(row);
           rowCount++;
+          totalDumpedRows++;
 
           if (batch.length >= 1000) {
             const valuesSql = batch.map(r => `(${cols.map(c => sqlEscapeString(r[c])).join(', ')})`).join(',\n');
@@ -266,7 +268,7 @@ export async function createDatabaseBackup(options = {}) {
       packUpDurationSeconds: parseFloat(duration),
       sizeBytes: stats.size,
       sizeFormatted: `${sizeMb} MB`,
-      totalRowsDumped
+      totalRowsDumped: totalDumpedRows
     };
 
     try {
