@@ -15,6 +15,8 @@ import boothRoutes from './routes/booths.js';
 import reportRoutes from './routes/reports.js';
 import syncStatusRoutes from './routes/sync.js';
 import formFieldRoutes from './routes/formFields.js';
+import backupRoutes from './routes/backups.js';
+import { startBackupScheduler } from './lib/backupScheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -103,6 +105,7 @@ app.use('/api/booths', boothRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/sync', syncStatusRoutes);
 app.use('/api/form-fields', formFieldRoutes);
+app.use(backupRoutes);
 
 app.use('/api', (req, res) =>
   res.status(404).json({ error: `No API route for ${req.method} ${req.originalUrl}` })
@@ -139,6 +142,7 @@ app.listen(PORT, '0.0.0.0', async () => {
   } catch (e) {
     console.log(`\n  VMS API (Direct MySQL)  ->  http://localhost:${PORT} (ready)`);
   }
+  startBackupScheduler();
 });
 
 export { app };
