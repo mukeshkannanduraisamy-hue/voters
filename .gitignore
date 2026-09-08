@@ -3,8 +3,8 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/*.db.zip
-web/dist/
 .env
+# web/dist/ (tracked so production assets are pre-built for deployment)
 *.log
 ~$*
 tsconfig.tsbuildinfo

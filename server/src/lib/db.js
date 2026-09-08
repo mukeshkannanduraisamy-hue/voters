@@ -50,20 +50,44 @@ function flatParams(args) {
   return arr.map(v => v === undefined ? null : v);
 }
 
+// Render's free tier fully suspends this process when idle. Any connection
+// the pool was holding at the moment of suspension is stale by the time a
+// request wakes it back up — the remote MySQL server has long since closed
+// it — but mysql2 doesn't know that until it actually tries to use it, so
+// the *first* query after a cold start fails with ECONNRESET/PROTOCOL_
+// CONNECTION_LOST/ETIMEDOUT even though the database itself is perfectly
+// healthy (confirmed: the very next request always succeeds). Retrying once
+// transparently absorbs exactly that one-time failure instead of surfacing
+// it to the user as a 500.
+const TRANSIENT_CODES = new Set([
+  'PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED',
+  'EPIPE', 'PROTOCOL_SEQUENCE_TIMEOUT',
+]);
+
+async function poolQuery(sql, params) {
+  try {
+    return await pool.query(sql, params);
+  } catch (err) {
+    if (!TRANSIENT_CODES.has(err.code)) throw err;
+    await new Promise((r) => setTimeout(r, 150));
+    return await pool.query(sql, params);
+  }
+}
+
 export const db = {
   prepare(sql) {
     const translated = translateSql(sql);
     return {
       async get(...params) {
-        const [rows] = await pool.query(translated, flatParams(params));
+        const [rows] = await poolQuery(translated, flatParams(params));
         return rows[0] || null;
       },
       async all(...params) {
-        const [rows] = await pool.query(translated, flatParams(params));
+        const [rows] = await poolQuery(translated, flatParams(params));
         return rows;
       },
       async run(...params) {
-        const [result] = await pool.query(translated, flatParams(params));
+        const [result] = await poolQuery(translated, flatParams(params));
         return {
           changes: result.affectedRows ?? 0,
           lastInsertRowid: result.insertId ?? null,
@@ -87,7 +111,7 @@ export const db = {
     if (s.toUpperCase() === 'BEGIN' || s.toUpperCase() === 'COMMIT' || s.toUpperCase() === 'ROLLBACK') {
       return;
     }
-    await pool.query(translateSql(sql));
+    await poolQuery(translateSql(sql));
   }
 };
 
@@ -135,12 +159,12 @@ export async function migrate() {
   console.log(`[db] Connected to MySQL (${DB_HOST}:${DB_PORT}/${DB_NAME})`);
   // Ensure Super Admin exists
   try {
-    const [existing] = await pool.query('SELECT id FROM vms_users WHERE mobile_number = ?', ['8144928022']);
+    const [existing] = await poolQuery('SELECT id FROM vms_users WHERE mobile_number = ?', ['8144928022']);
     if (!existing.length) {
       const salt = crypto.randomBytes(16).toString('hex');
       const derived = crypto.scryptSync('admin123', salt, 64).toString('hex');
       const hash = 'scrypt$' + salt + '$' + derived;
-      await pool.query(
+      await poolQuery(
         'INSERT INTO vms_users (id, mobile_number, password_hash, role, full_name, is_active) VALUES (?, ?, ?, ?, ?, 1)',
         [crypto.randomUUID(), '8144928022', hash, 'A1_SUPER_ADMIN', 'Super Admin']
       );

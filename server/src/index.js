@@ -17,6 +17,30 @@ import syncStatusRoutes from './routes/sync.js';
 import formFieldRoutes from './routes/formFields.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Automatically load local .env file if present
+for (const envFile of [path.resolve(__dirname, '../.env'), path.resolve(__dirname, '../../.env')]) {
+  try {
+    if (fs.existsSync(envFile)) {
+      if (typeof process.loadEnvFile === 'function') {
+        process.loadEnvFile(envFile);
+      } else {
+        const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eq = trimmed.indexOf('=');
+          if (eq > 0) {
+            const k = trimmed.slice(0, eq).trim();
+            const v = trimmed.slice(eq + 1).trim();
+            if (!process.env[k]) process.env[k] = v;
+          }
+        }
+      }
+    }
+  } catch {}
+}
+
 const PORT = Number(process.env.PORT) || 4000;
 
 await migrate();
@@ -103,7 +127,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   try {
     const c = (await db.prepare('SELECT COUNT(*) c FROM voters_master WHERE is_deleted = 0').get())?.c ?? 0;
     const ac = await db.prepare('SELECT ac_no, ac_name_ta FROM polling_parts LIMIT 1').get();

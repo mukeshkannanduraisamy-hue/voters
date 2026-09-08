@@ -1,5 +1,5 @@
 import express from 'express';
-import { db, nowIso } from '../lib/db.js';
+import { db, nowIso, withTransaction } from '../lib/db.js';
 import { authenticate, requireRole, audit, ROLES } from '../lib/auth.js';
 import { buildPartFilter } from '../lib/scope.js';
 import { invalidateDashboardCache } from './dashboard.js';
@@ -374,39 +374,45 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
     const existing = await db.prepare('SELECT epic_id, surveyed_by FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
     const surveyedBy = existing ? existing.surveyed_by : req.user.id;
 
-    await db.prepare(
-      `INSERT INTO voter_surveys
-         (epic_id, corrected_name_ta, corrected_relative_name_ta, phone_number,
-          caste_id, job_id, party_id, education_id, other_job_text, remarks,
-          surveyed_by, last_updated_by, surveyed_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
-       ON DUPLICATE KEY UPDATE
-         corrected_name_ta = VALUES(corrected_name_ta),
-         corrected_relative_name_ta = VALUES(corrected_relative_name_ta),
-         phone_number = VALUES(phone_number),
-         caste_id = VALUES(caste_id),
-         job_id = VALUES(job_id),
-         party_id = VALUES(party_id),
-         education_id = VALUES(education_id),
-         other_job_text = VALUES(other_job_text),
-         remarks = VALUES(remarks),
-         last_updated_by = VALUES(last_updated_by),
-         updated_at = NOW()`
-    ).run(
-      voter.epic_id, correctedName, correctedRelative, phone || '',
-      casteId, jobId, partyId, educationId, otherJobText, remarks,
-      surveyedBy, req.user.id
-    );
+    // The main survey upsert and its custom-field values must land together —
+    // withTransaction holds one connection for the whole block, so a failure
+    // partway through (e.g. a bad custom-field value) rolls back the survey
+    // upsert too instead of leaving it committed with only some fields saved.
+    await withTransaction(async (trx) => {
+      await trx.prepare(
+        `INSERT INTO voter_surveys
+           (epic_id, corrected_name_ta, corrected_relative_name_ta, phone_number,
+            caste_id, job_id, party_id, education_id, other_job_text, remarks,
+            surveyed_by, last_updated_by, surveyed_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
+         ON DUPLICATE KEY UPDATE
+           corrected_name_ta = VALUES(corrected_name_ta),
+           corrected_relative_name_ta = VALUES(corrected_relative_name_ta),
+           phone_number = VALUES(phone_number),
+           caste_id = VALUES(caste_id),
+           job_id = VALUES(job_id),
+           party_id = VALUES(party_id),
+           education_id = VALUES(education_id),
+           other_job_text = VALUES(other_job_text),
+           remarks = VALUES(remarks),
+           last_updated_by = VALUES(last_updated_by),
+           updated_at = NOW()`
+      ).run(
+        voter.epic_id, correctedName, correctedRelative, phone || '',
+        casteId, jobId, partyId, educationId, otherJobText, remarks,
+        surveyedBy, req.user.id
+      );
 
-    const upsertField = db.prepare(
-      `INSERT INTO survey_field_values (epic_id, field_id, value) VALUES (?,?,?)
-       ON DUPLICATE KEY UPDATE value = VALUES(value)`
-    );
-    for (const def of activeDefs) {
-      const raw = customFields[def.id];
-      const value = raw === undefined || raw === null ? '' : String(raw).trim();
-      if (value) await upsertField.run(voter.epic_id, def.id, value);
-    }
+      const upsertField = trx.prepare(
+        `INSERT INTO survey_field_values (epic_id, field_id, value) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE value = VALUES(value)`
+      );
+      for (const def of activeDefs) {
+        const raw = customFields[def.id];
+        const value = raw === undefined || raw === null ? '' : String(raw).trim();
+        if (value) await upsertField.run(voter.epic_id, def.id, value);
+      }
+    });
 
     audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id, null);
     invalidateDashboardCache();
