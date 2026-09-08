@@ -25,6 +25,12 @@ interface FormState {
   customFields: Record<number, string>;
 }
 
+/** Keeps only the last 10 digits, which strips a leading "91" country code or "0" trunk prefix either way. */
+const last10Digits = (raw: string) => {
+  const digits = raw.replace(/\D/g, '');
+  return digits.length > 10 ? digits.slice(-10) : digits;
+};
+
 const EMPTY: FormState = {
   correctedNameTa: '', correctedRelativeNameTa: '', phoneNumber: '',
   sector: '', jobId: '', otherJobText: '', casteId: '', partyId: null,
@@ -211,12 +217,7 @@ export default function Survey() {
           const c = contacts[0];
           const rawTel = Array.isArray(c.tel) ? c.tel[0] : c.tel;
           if (rawTel) {
-            let digits = String(rawTel).replace(/\D/g, '');
-            if (digits.length > 10 && (digits.startsWith('91') || digits.startsWith('0'))) {
-              digits = digits.slice(-10);
-            } else if (digits.length > 10) {
-              digits = digits.slice(-10);
-            }
+            const digits = last10Digits(String(rawTel));
             if (digits.length === 10) {
               set('phoneNumber', digits);
               const cName = c.name ? (Array.isArray(c.name) ? c.name[0] : c.name) : '';
@@ -246,12 +247,7 @@ export default function Survey() {
     if (navigator.clipboard && navigator.clipboard.readText) {
       try {
         const text = await navigator.clipboard.readText();
-        let digits = text.replace(/\D/g, '');
-        if (digits.length > 10 && (digits.startsWith('91') || digits.startsWith('0'))) {
-          digits = digits.slice(-10);
-        } else if (digits.length > 10) {
-          digits = digits.slice(-10);
-        }
+        const digits = last10Digits(text);
         if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) {
           set('phoneNumber', digits);
           toast.ok('Number imported from clipboard', digits);
