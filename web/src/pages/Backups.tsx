@@ -5,14 +5,6 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/icons';
 
-interface NextBackupInfo {
-  nextSlot: string;
-  nextTime: string;
-  minutesUntilNext: number;
-  countdown: string;
-  dailySlots: string[];
-}
-
 interface BackupItem {
   filename: string;
   sizeBytes: number;
@@ -41,13 +33,11 @@ interface BackupsResponse {
   success: boolean;
   total: number;
   schedule: string;
-  nextBackup?: NextBackupInfo;
   backups: BackupItem[];
 }
 
 export default function Backups() {
   const [backups, setBackups] = useState<BackupItem[] | null>(null);
-  const [nextBackup, setNextBackup] = useState<NextBackupInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -62,7 +52,6 @@ export default function Backups() {
     try {
       const data = await api.get<BackupsResponse>('/api/admin/backups');
       setBackups(data.backups || []);
-      if (data.nextBackup) setNextBackup(data.nextBackup);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load database backups');
     } finally {
@@ -129,12 +118,6 @@ export default function Backups() {
     );
   }, [backups, q]);
 
-  const totalSizeMb = useMemo(() => {
-    if (!backups || !backups.length) return '0.00';
-    const totalBytes = backups.reduce((acc, b) => acc + (b.sizeBytes || 0), 0);
-    return (totalBytes / (1024 * 1024)).toFixed(2);
-  }, [backups]);
-
   return (
     <>
       <PageHead
@@ -162,58 +145,6 @@ export default function Backups() {
       />
 
       {error && <Alert tone="bad" title="Backup error">{error}</Alert>}
-
-      {/* KPI Metrics */}
-      <div className="grid-3" style={{ marginBottom: 'var(--sp-6)' }}>
-        <Card>
-          <div style={{ padding: 'var(--sp-4)' }}>
-            <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span className="t-xs t-muted t-upper t-bold">Snapshots Available</span>
-              <span style={{ color: 'var(--brand-500)' }}><Icon name="database" size={20} /></span>
-            </div>
-            <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 700, marginTop: 'var(--sp-2)' }}>
-              {backups ? backups.length : '—'}
-            </div>
-            <div className="t-xs t-muted mt-1">
-              Total Storage: <span style={{ fontWeight: 600 }}>{totalSizeMb} MB</span> (Gzip Compressed)
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ padding: 'var(--sp-4)' }}>
-            <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span className="t-xs t-muted t-upper t-bold">Daily 3x Automation</span>
-              <span style={{ color: 'var(--emerald-500)' }}><Icon name="clock" size={20} /></span>
-            </div>
-            <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 700, marginTop: 'var(--sp-2)' }}>
-              3 Times / Day
-            </div>
-            <div className="t-xs t-muted mt-1">
-              {nextBackup ? (
-                <span>Next: <strong style={{ color: 'var(--brand-600)' }}>{nextBackup.nextTime}</strong> ({nextBackup.countdown})</span>
-              ) : (
-                <span>Scheduled: <strong>08:00 AM</strong>, <strong>02:00 PM</strong>, <strong>09:00 PM IST</strong></span>
-              )}
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ padding: 'var(--sp-4)' }}>
-            <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <span className="t-xs t-muted t-upper t-bold">Auto-Delete Policy</span>
-              <span style={{ color: 'var(--amber-500)' }}><Icon name="trash" size={20} /></span>
-            </div>
-            <div style={{ fontSize: 'var(--fs-2xl)', fontWeight: 700, marginTop: 'var(--sp-2)' }}>
-              3 Days (72 Hours)
-            </div>
-            <div className="t-xs t-muted mt-1">
-              Files older than 72 hours from backup time are automatically deleted
-            </div>
-          </div>
-        </Card>
-      </div>
 
       {/* Backups Table */}
       <Card>
