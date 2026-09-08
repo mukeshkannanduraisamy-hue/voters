@@ -9,9 +9,9 @@ import { scopeDetail, scopePartNos } from '../lib/scope.js';
 
 const router = express.Router();
 
-export function publicUser(user) {
-  const parts = scopePartNos(user);
-  const detail = scopeDetail(user.id);
+export async function publicUser(user) {
+  const parts = await scopePartNos(user);
+  const detail = await scopeDetail(user.id);
   return {
     id: user.id,
     mobileNumber: user.mobile_number,
@@ -26,67 +26,62 @@ export function publicUser(user) {
     partCount: parts === null ? null : parts.length,
     partNos: parts ?? [],
     jurisdictions: detail,
-    votersInScope: detail.reduce((a, d) => a + d.voter_count, 0),
+    votersInScope: detail.reduce((a, d) => a + Number(d.voter_count || 0), 0),
     home: HOME_FOR[user.role],
   };
 }
 
 /** POST /api/auth/login — { mobileNumber, password } -> sets vms_token cookie */
-router.post('/login', (req, res) => {
-  const mobile = String(req.body?.mobileNumber ?? req.body?.mobile_number ?? '').trim();
-  const password = String(req.body?.password ?? '');
+router.post('/login', async (req, res, next) => {
+  try {
+    const mobile = String(req.body?.mobileNumber ?? req.body?.mobile_number ?? '').trim();
+    const password = String(req.body?.password ?? '');
 
-  if (!mobile || !password) {
-    return res.status(400).json({ error: 'Mobile number and password are both required' });
+    if (!mobile || !password) {
+      return res.status(400).json({ error: 'Mobile number and password are both required' });
+    }
+    if (!/^[6-9]\d{9}$/.test(mobile)) {
+      return res.status(400).json({ error: 'Enter a valid 10-digit mobile number' });
+    }
+
+    const user = await db.prepare('SELECT * FROM users WHERE mobile_number = ?').get(mobile);
+    if (!user || !verifyPassword(password, user.password_hash)) {
+      audit(user?.id ?? null, 'LOGIN_FAILED', 'user', mobile, 'Invalid credentials');
+      return res.status(401).json({
+        error: 'Invalid mobile number or password (தவறான கைபேசி எண் அல்லது கடவுச்சொல்)',
+      });
+    }
+    if (!user.is_active) {
+      audit(user.id, 'LOGIN_BLOCKED', 'user', user.id, 'Account disabled');
+      return res.status(403).json({ error: 'Account is disabled. Please contact Super Admin.' });
+    }
+
+    await db.prepare('UPDATE users SET last_login_at = NOW() WHERE id = ?').run(user.id);
+    audit(user.id, 'LOGIN', 'user', user.id, null);
+
+    const fresh = await db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    const token = signToken(fresh);
+    setAuthCookie(res, token);
+
+    const pubUser = await publicUser(fresh);
+    res.json({ token, user: pubUser, redirectTo: HOME_FOR[fresh.role] });
+  } catch (err) {
+    next(err);
   }
-  if (!/^[6-9]\d{9}$/.test(mobile)) {
-    return res.status(400).json({ error: 'Enter a valid 10-digit mobile number' });
-  }
-
-  const user = db.prepare('SELECT * FROM users WHERE mobile_number = ?').get(mobile);
-  // Identical message for unknown mobile and wrong password — the endpoint must
-  // not be usable to enumerate which accounts exist.
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    audit(user?.id ?? null, 'LOGIN_FAILED', 'user', mobile, 'Invalid credentials');
-    return res.status(401).json({
-      error: 'Invalid mobile number or password (தவறான கைபேசி எண் அல்லது கடவுச்சொல்)',
-    });
-  }
-  if (!user.is_active) {
-    audit(user.id, 'LOGIN_BLOCKED', 'user', user.id, 'Account disabled');
-    return res.status(403).json({ error: 'Account is disabled. Please contact Super Admin.' });
-  }
-
-  db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), user.id);
-  audit(user.id, 'LOGIN', 'user', user.id, null);
-
-  const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
-  const token = signToken(fresh);
-  setAuthCookie(res, token);
-
-  // The token is also returned so scripts and tests can use a bearer header.
-  res.json({ token, user: publicUser(fresh), redirectTo: HOME_FOR[fresh.role] });
 });
 
 /** GET /api/auth/me — current session identity + live scope */
-router.get('/me', authenticate, (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  res.json({ user: publicUser(user) });
+router.get('/me', authenticate, async (req, res, next) => {
+  try {
+    const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const pubUser = await publicUser(user);
+    res.json({ user: pubUser });
+  } catch (err) {
+    next(err);
+  }
 });
 
-/**
- * POST /api/auth/logout — clears the session cookie.
- *
- * Uses `authenticateOptional` rather than `authenticate`: logout must succeed
- * even for an already-expired or invalid token, since that is exactly the
- * state a client may call it from. When the token is still valid, `req.user`
- * is populated and the logout is recorded in the audit log.
- *
- * (This used to reference `req.user` without any authentication middleware
- * at all, so `req.user` was always undefined and the DB lookup below threw
- * on every call — silently, since it was wrapped in a try/catch. Logout
- * itself worked, but no LOGOUT event was ever recorded.)
- */
+/** POST /api/auth/logout — clears the session cookie */
 router.post('/logout', authenticateOptional, (req, res) => {
   if (req.user) audit(req.user.id, 'LOGOUT', 'user', req.user.id, null);
   clearAuthCookie(res);
@@ -94,20 +89,24 @@ router.post('/logout', authenticateOptional, (req, res) => {
 });
 
 /** POST /api/auth/change-password — { currentPassword, newPassword } */
-router.post('/change-password', authenticate, (req, res) => {
-  const current = String(req.body?.currentPassword ?? req.body?.current_password ?? '');
-  const next = String(req.body?.newPassword ?? req.body?.new_password ?? '');
+router.post('/change-password', authenticate, async (req, res, next) => {
+  try {
+    const current = String(req.body?.currentPassword ?? req.body?.current_password ?? '');
+    const nextPassword = String(req.body?.newPassword ?? req.body?.new_password ?? '');
 
-  if (next.length < 6) {
-    return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    if (nextPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!verifyPassword(current, user.password_hash)) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(nextPassword), user.id);
+    audit(user.id, 'PASSWORD_CHANGED', 'user', user.id, null);
+    res.json({ ok: true, message: 'Password updated successfully' });
+  } catch (err) {
+    next(err);
   }
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  if (!verifyPassword(current, user.password_hash)) {
-    return res.status(400).json({ error: 'Current password is incorrect' });
-  }
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), user.id);
-  audit(user.id, 'PASSWORD_CHANGED', 'user', user.id, null);
-  res.json({ ok: true, message: 'Password updated successfully' });
 });
 
 export default router;

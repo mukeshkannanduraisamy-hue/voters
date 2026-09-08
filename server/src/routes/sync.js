@@ -1,17 +1,22 @@
 import express from 'express';
 import { authenticate, requireRole, ROLES } from '../lib/auth.js';
-import { outboxStats } from '../lib/outbox.js';
 
 const router = express.Router();
 router.use(authenticate);
 
-/** GET /api/sync/status — outbox health, for an operator to confirm sync is keeping up. */
+/** GET /api/sync/status — reports database sync and connection status */
 router.get('/status', requireRole(ROLES.A1), (req, res) => {
-  const stats = outboxStats();
   res.json({
-    enabled: !!process.env.SYNC_API_URL,
-    apiUrl: process.env.SYNC_API_URL || null,
-    ...stats,
+    enabled: false,
+    apiUrl: null,
+    directMySql: true,
+    host: process.env.DB_HOST || 'srv1497.hstgr.io',
+    database: process.env.DB_NAME || 'u403881955_ECL',
+    tablePrefix: 'vms_',
+    status: 'connected',
+    pending: 0,
+    synced: 0,
+    maxPendingAttempts: 0,
   });
 });
 

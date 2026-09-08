@@ -258,9 +258,19 @@ export function Badge({ tone = 'muted', children, dot }: {
   return <span className={`badge badge-${tone}`}>{dot && <span className="dot" />}{children}</span>;
 }
 
+const ROLE_PILL: Record<string, { short: string; label: string }> = {
+  A1_SUPER_ADMIN: { short: 'A1', label: 'Super Admin' },
+  A2_SUPERVISOR: { short: 'A2', label: 'Supervisor' },
+  A3_FIELD_AGENT: { short: 'A3', label: 'Field Agent' },
+};
+
 export function RolePill({ role }: { role: string }) {
-  const short = role === 'A1_SUPER_ADMIN' ? 'A1' : role === 'A2_ADMIN' ? 'A2' : 'A3';
-  const label = role === 'A1_SUPER_ADMIN' ? 'Super Admin' : role === 'A2_ADMIN' ? 'Sub Admin' : 'Field Agent';
+  // Falls back to the raw role string for anything unrecognized, rather than
+  // silently mislabeling it as a different role (the previous version checked
+  // for a role name — 'A2_ADMIN' — that doesn't exist anywhere else in the
+  // app; the real value is 'A2_SUPERVISOR', so every supervisor's badge fell
+  // through to the A3/Field Agent branch and displayed the wrong role).
+  const { short, label } = ROLE_PILL[role] ?? { short: role, label: role };
   return <span className={`role-pill role-${short}`}>{short} · {label}</span>;
 }
 

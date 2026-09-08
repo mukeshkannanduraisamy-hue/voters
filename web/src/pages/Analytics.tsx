@@ -104,10 +104,10 @@ export default function Analytics() {
             <Empty icon="flag" title="No party data yet">Party leanings appear as agents submit surveys.</Empty>
           ) : (
             <div className="stack tight">
-              {breakdown.parties.map((p) => {
+              {(() => {
                 const max = Math.max(...breakdown.parties.map((x) => x.count));
                 const total = breakdown.parties.reduce((a, x) => a + x.count, 0);
-                return (
+                return breakdown.parties.map((p) => (
                   <div key={p.code} className="hbar-row">
                     <div className="row tight" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
                       <PartySymbol party={{ name: p.label, party_code: p.code, color_code: p.color, symbol_img: p.symbol }} size={26} />
@@ -124,8 +124,8 @@ export default function Analytics() {
                       <span className="t-subtle t-xs"> · {Math.round((p.count / total) * 100)}%</span>
                     </div>
                   </div>
-                );
-              })}
+                ));
+              })()}
             </div>
           )}
         </div>
@@ -226,7 +226,7 @@ export default function Analytics() {
                     <th className="num">Today</th>
                     <th className="num">Pending</th>
                     <th style={{ width: 160 }}>Progress</th>
-                    <th>Last seen</th>
+                    <th>Last login</th>
                   </tr>
                 </thead>
                 <tbody>

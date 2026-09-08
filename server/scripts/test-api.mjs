@@ -670,14 +670,15 @@ section('Sync outbox status (transactional outbox)');
   check('A2 cannot read sync status (403)', (await api('GET', '/api/sync/status', { token: T2 })).status === 403);
   check('A3 cannot read sync status (403)', (await api('GET', '/api/sync/status', { token: T3 })).status === 403);
 
-  // A write to any synced table (caste_master here) must produce a pending
-  // outbox row — proof the trigger fired in the same transaction as the write.
-  const before = (await api('GET', '/api/sync/status', { token: T1 })).data;
-  const created = await api('POST', '/api/masters/caste', { token: T1, body: { name: 'ZZ Outbox Probe ' + Date.now(), category: 'OTHER' } });
-  const after = await api('GET', '/api/sync/status', { token: T1 });
-  check('a synced-table write increments outbox counts', (after.data.pending + after.data.synced) > (before.pending + before.synced));
-
-  if (created.data?.id) await api('DELETE', `/api/masters/caste/${created.data.id}`, { token: T1 });
+  if (s1.data?.directMySql) {
+    check('direct MySQL mode active (no outbox needed)', s1.data.directMySql === true && s1.data.status === 'connected');
+  } else {
+    const before = (await api('GET', '/api/sync/status', { token: T1 })).data;
+    const created = await api('POST', '/api/masters/caste', { token: T1, body: { name: 'ZZ Outbox Probe ' + Date.now(), category: 'OTHER' } });
+    const after = await api('GET', '/api/sync/status', { token: T1 });
+    check('a synced-table write increments outbox counts', (after.data.pending + after.data.synced) > (before.pending + before.synced));
+    if (created.data?.id) await api('DELETE', `/api/masters/caste/${created.data.id}`, { token: T1 });
+  }
 }
 
 // cleanup

@@ -4,23 +4,21 @@ import { ROLES } from './auth.js';
 /**
  * Jurisdiction is anchored on the polling part (booth).
  *
- * @returns {number[]|null} null = global (A1), otherwise the allowed part numbers.
+ * @returns {Promise<number[]|null>} null = global (A1), otherwise the allowed part numbers.
  */
-export function scopePartNos(user) {
+export async function scopePartNos(user) {
   if (user.role === ROLES.A1) return null;
-  return db
+  const rows = await db
     .prepare('SELECT part_no FROM user_jurisdictions WHERE user_id = ? ORDER BY part_no')
-    .all(user.id)
-    .map((r) => r.part_no);
+    .all(user.id);
+  return rows.map((r) => r.part_no);
 }
 
 /**
  * SQL predicate restricting `<alias>.part_no` to the caller's booths.
- * A scoped user with no assignment yields `1=0` — they see nothing rather than
- * everything, which is the safe direction to fail.
  */
-export function buildPartFilter(user, alias = 'v') {
-  const parts = scopePartNos(user);
+export async function buildPartFilter(user, alias = 'v') {
+  const parts = await scopePartNos(user);
   if (parts === null) return { sql: '1=1', params: [] };
   if (parts.length === 0) return { sql: '1=0', params: [] };
   return {
@@ -30,16 +28,16 @@ export function buildPartFilter(user, alias = 'v') {
 }
 
 /** True when every booth in `partNos` lies inside the user's own scope. */
-export function scopeContains(user, partNos) {
-  const allowed = scopePartNos(user);
+export async function scopeContains(user, partNos) {
+  const allowed = await scopePartNos(user);
   if (allowed === null) return true;
   const set = new Set(allowed);
   return partNos.every((p) => set.has(Number(p)));
 }
 
 /** Booth detail with local-body names, for display on profile and user cards. */
-export function scopeDetail(userId) {
-  return db
+export async function scopeDetail(userId) {
+  return await db
     .prepare(
       `SELECT pp.part_no, pp.local_body_name_ta, pp.local_body_type, pp.ac_no, pp.ac_name_ta,
               (SELECT COUNT(*) FROM voters_master v WHERE v.part_no = pp.part_no AND v.is_deleted = 0) AS voter_count
@@ -57,12 +55,12 @@ export function scopeDetail(userId) {
  *   A2 -> field agents whose booths overlap the supervisor's own
  *   A3 -> nobody
  */
-export function visibleUserIds(user) {
+export async function visibleUserIds(user) {
   if (user.role === ROLES.A1) return null;
   if (user.role !== ROLES.A2) return [];
-  const parts = scopePartNos(user);
+  const parts = await scopePartNos(user);
   if (!parts.length) return [];
-  return db
+  const rows = await db
     .prepare(
       `SELECT DISTINCT u.id
          FROM users u
@@ -70,23 +68,22 @@ export function visibleUserIds(user) {
         WHERE u.role = '${ROLES.A3}'
           AND uj.part_no IN (${parts.map(() => '?').join(',')})`
     )
-    .all(...parts)
-    .map((r) => r.id);
+    .all(...parts);
+  return rows.map((r) => r.id);
 }
 
 /**
  * The booths a caller may assign or filter by, grouped by local body.
- * Already scope-filtered, so an A2 can never widen its own reach.
  */
-export function assignableParts(user) {
-  const parts = scopePartNos(user);
+export async function assignableParts(user) {
+  const parts = await scopePartNos(user);
   const scoped = parts !== null;
   if (scoped && parts.length === 0) return { localBodies: [], parts: [] };
 
   const where = scoped ? `WHERE pp.part_no IN (${parts.map(() => '?').join(',')})` : '';
   const params = scoped ? parts : [];
 
-  const rows = db
+  const rows = await db
     .prepare(
       `SELECT pp.part_no, pp.local_body_name_ta, pp.local_body_type, pp.main_village_ta,
               pp.ac_no, pp.ac_name_ta,

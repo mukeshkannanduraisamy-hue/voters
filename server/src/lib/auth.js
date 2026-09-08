@@ -76,13 +76,8 @@ export function clearAuthCookie(res) {
 /**
  * Resolves the session from the cookie, falling back to a bearer header so the
  * API stays scriptable for tooling and tests.
- *
- * The user row is re-read on every request, so disabling an account or changing
- * its role takes effect immediately rather than at token expiry. Returns a
- * `{ user }` or `{ error, status }` result rather than writing to `res` itself,
- * so both the strict and optional middleware below can share this logic.
  */
-function resolveSession(req) {
+async function resolveSession(req) {
   const header = req.headers.authorization || '';
   const token = req.cookies?.[COOKIE_NAME]
     || (header.startsWith('Bearer ') ? header.slice(7) : null);
@@ -97,7 +92,7 @@ function resolveSession(req) {
     return { error: expired ? 'Session expired, please sign in again' : 'Invalid session token', status: 401, clearCookie: true };
   }
 
-  const user = db
+  const user = await db
     .prepare('SELECT id, mobile_number, role, epic_id, full_name, is_active FROM users WHERE id = ?')
     .get(payload.sub);
 
@@ -110,8 +105,8 @@ function resolveSession(req) {
 }
 
 /** Requires a valid session; rejects the request with 401/403 when there isn't one. */
-export function authenticate(req, res, next) {
-  const result = resolveSession(req);
+export async function authenticate(req, res, next) {
+  const result = await resolveSession(req);
   if (result.error) {
     if (result.clearCookie) clearAuthCookie(res);
     return res.status(result.status).json({ error: result.error });
@@ -122,12 +117,10 @@ export function authenticate(req, res, next) {
 }
 
 /**
- * Identifies the caller when possible but never rejects the request — for
- * endpoints like logout that must succeed even with a missing/expired token,
- * while still recording who it was when the session was actually valid.
+ * Identifies the caller when possible but never rejects the request.
  */
-export function authenticateOptional(req, res, next) {
-  const result = resolveSession(req);
+export async function authenticateOptional(req, res, next) {
+  const result = await resolveSession(req);
   if (result.user) {
     req.user = result.user;
     touchLastSeen(result.user.id);
@@ -138,12 +131,6 @@ export function authenticateOptional(req, res, next) {
 /** A user is considered "online" if seen within this window. Shared with routes that report it. */
 export const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
-/**
- * Bumps `last_seen_at` for presence ("online now") indicators — but at most
- * once every 60s per user, in-process. `users` is a synced table, so touching
- * it on every single authenticated request would land one outbox event per
- * request; throttling caps it at ~1/user/minute regardless of traffic.
- */
 const lastTouch = new Map(); // userId -> ms timestamp of the last DB write
 const TOUCH_THROTTLE_MS = 60 * 1000;
 
@@ -152,11 +139,7 @@ function touchLastSeen(userId) {
   const last = lastTouch.get(userId) ?? 0;
   if (now - last < TOUCH_THROTTLE_MS) return;
   lastTouch.set(userId, now);
-  try {
-    db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(new Date(now).toISOString(), userId);
-  } catch {
-    /* presence tracking must never break a request */
-  }
+  db.prepare('UPDATE users SET last_seen_at = NOW() WHERE id = ?').run(userId).catch(() => {});
 }
 
 /** requireRole(ROLES.A1, ROLES.A2) */
@@ -171,10 +154,7 @@ export function requireRole(...allowed) {
 }
 
 export function audit(userId, action, entity, entityId, detail) {
-  try {
-    db.prepare('INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES (?,?,?,?,?)')
-      .run(userId ?? null, action, entity ?? null, entityId != null ? String(entityId) : null, detail ?? null);
-  } catch {
-    /* auditing must never break the request */
-  }
+  db.prepare('INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES (?,?,?,?,?)')
+    .run(userId ?? null, action, entity ?? null, entityId != null ? String(entityId) : null, detail ?? null)
+    .catch(() => {});
 }

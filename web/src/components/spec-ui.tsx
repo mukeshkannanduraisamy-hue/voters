@@ -45,7 +45,11 @@ export interface PartyOption {
 export function PartyGrid({ parties, value, onChange }: {
   parties: PartyOption[];
   value: number | null;
-  onChange: (id: number) => void;
+  // Clicking the already-selected party deselects it (see onClick below), so
+  // this must accept null — the previous `(id: number) => void` signature hid
+  // that from every call site's type checking (vite's dev/build pipeline only
+  // strips types with esbuild and never runs tsc, so this went uncaught).
+  onChange: (id: number | null) => void;
 }) {
   return (
     <div className="party-grid" role="radiogroup" aria-label="Political party">

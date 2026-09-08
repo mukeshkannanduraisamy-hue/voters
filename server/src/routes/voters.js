@@ -42,9 +42,9 @@ const COUNT_JOINS = `
   JOIN polling_parts pp ON pp.part_no = v.part_no
   LEFT JOIN voter_surveys s ON s.epic_id = v.epic_id`;
 
-/** Custom field answers for one survey, joined against the current field defs so a renamed/disabled field still shows correctly. */
-function customFieldsFor(epicId) {
-  return db
+/** Custom field answers for one survey */
+async function customFieldsFor(epicId) {
+  const rows = await db
     .prepare(
       `SELECT d.id AS field_id, d.field_key, d.label, d.label_ta, d.field_type, d.is_active, v.value
          FROM survey_field_values v
@@ -52,20 +52,21 @@ function customFieldsFor(epicId) {
         WHERE v.epic_id = ?
         ORDER BY d.sort_order, d.id`
     )
-    .all(epicId)
-    .map((r) => ({
-      fieldId: r.field_id,
-      key: r.field_key,
-      label: r.label,
-      labelTa: r.label_ta,
-      fieldType: r.field_type,
-      isActive: !!r.is_active,
-      value: r.value,
-    }));
+    .all(epicId);
+  return rows.map((r) => ({
+    fieldId: r.field_id,
+    key: r.field_key,
+    label: r.label,
+    labelTa: r.label_ta,
+    fieldType: r.field_type,
+    isActive: !!r.is_active,
+    value: r.value,
+  }));
 }
 
-function shapeVoter(r, { includeCustomFields = false } = {}) {
+async function shapeVoter(r, { includeCustomFields = false } = {}) {
   if (!r) return null;
+  const customFields = includeCustomFields && r.survey_epic ? await customFieldsFor(r.epic_id) : undefined;
   return {
     epicId: r.epic_id,
     voterSno: r.voter_sno,
@@ -120,13 +121,12 @@ function shapeVoter(r, { includeCustomFields = false } = {}) {
           agentId: r.surveyed_by,
           lastUpdatedBy: r.last_updated_by,
           lastEditorName: r.last_editor_name,
-          customFields: includeCustomFields ? customFieldsFor(r.epic_id) : undefined,
+          customFields,
         }
       : null,
   };
 }
 
-/** Whitelisted sort columns — anything else would be an injection surface. */
 const SORT_COLUMNS = {
   voter_sno: 'v.voter_sno',
   name: 'v.name_ta',
@@ -137,21 +137,32 @@ const SORT_COLUMNS = {
   surveyed_at: 's.surveyed_at',
 };
 
-function buildFilter(req) {
-  const scope = buildPartFilter(req.user, 'v');
+async function buildFilter(req) {
+  const scope = await buildPartFilter(req.user, 'v');
   const where = [scope.sql];
   const params = [...scope.params];
 
   const search = String(req.query.search ?? req.query.q ?? '').trim();
   if (search) {
-    where.push(`(
-      UPPER(v.epic_id) LIKE ?
-      OR v.name_ta LIKE ?
-      OR v.relative_name_ta LIKE ?
-      OR v.door_no LIKE ?
-      OR CAST(v.voter_sno AS TEXT) = ?
-    )`);
-    params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, search);
+    const isNum = /^\d+$/.test(search);
+    if (isNum) {
+      where.push(`(
+        UPPER(v.epic_id) LIKE ?
+        OR v.name_ta LIKE ?
+        OR v.relative_name_ta LIKE ?
+        OR v.door_no LIKE ?
+        OR v.voter_sno = ?
+      )`);
+      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, Number(search));
+    } else {
+      where.push(`(
+        UPPER(v.epic_id) LIKE ?
+        OR v.name_ta LIKE ?
+        OR v.relative_name_ta LIKE ?
+        OR v.door_no LIKE ?
+      )`);
+      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
   }
 
   const localBody = String(req.query.local_body ?? '').trim();
@@ -170,8 +181,6 @@ function buildFilter(req) {
   const partyId = Number(req.query.party_id);
   if (Number.isInteger(partyId) && partyId > 0) { where.push('s.party_id = ?'); params.push(partyId); }
 
-  // Also accepts the literal 'me', so the UI can filter "done by me" without
-  // knowing its own id in the URL (handled by the caller before this runs).
   const agentId = String(req.query.agent_id ?? '').trim();
   if (agentId) { where.push('s.surveyed_by = ?'); params.push(agentId); }
 
@@ -182,267 +191,269 @@ function buildFilter(req) {
 
 /**
  * GET /api/voters/directory
- * Paged, sortable electoral roll restricted to the caller's booths.
- * `agent_id=me` resolves to the caller's own id — lets any role (including a
- * field agent looking at their own booth) filter "done by me" without needing
- * to already know their own user id.
  */
-router.get('/directory', (req, res) => {
-  if (req.query.agent_id === 'me') req.query.agent_id = req.user.id;
+router.get('/directory', async (req, res, next) => {
+  try {
+    if (req.query.agent_id === 'me') req.query.agent_id = req.user.id;
 
-  const page = Math.max(1, Number(req.query.page) || 1);
-  const limit = Math.min(100, Math.max(10, Number(req.query.limit) || 25));
-  const f = buildFilter(req);
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(10, Number(req.query.limit) || 25));
+    const f = await buildFilter(req);
 
-  const sortKey = String(req.query.sort_by ?? 'voter_sno');
-  const sortCol = SORT_COLUMNS[sortKey] ?? SORT_COLUMNS.voter_sno;
-  const sortDir = String(req.query.sort_dir ?? 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    const sortKey = String(req.query.sort_by ?? 'voter_sno');
+    const sortCol = SORT_COLUMNS[sortKey] ?? SORT_COLUMNS.voter_sno;
+    const sortDir = String(req.query.sort_dir ?? 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
-  const total = db.prepare(`SELECT COUNT(*) c ${COUNT_JOINS} WHERE ${f.sql}`).get(...f.params).c;
-  const rows = db
-    .prepare(
-      `SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE ${f.sql}
-        ORDER BY ${sortCol} ${sortDir}, v.part_no, v.voter_sno
-        LIMIT ? OFFSET ?`
-    )
-    .all(...f.params, limit, (page - 1) * limit);
+    const totalRow = await db.prepare(`SELECT COUNT(*) c ${COUNT_JOINS} WHERE ${f.sql}`).get(...f.params);
+    const total = totalRow?.c ?? 0;
 
-  res.json({
-    rows: rows.map((r) => shapeVoter(r)),
-    total,
-    page,
-    limit,
-    pages: Math.max(1, Math.ceil(total / limit)),
-    sortBy: sortKey,
-    sortDir: sortDir.toLowerCase(),
-  });
-});
+    const rows = await db
+      .prepare(
+        `SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE ${f.sql}
+          ORDER BY ${sortCol} ${sortDir}, v.part_no, v.voter_sno
+          LIMIT ? OFFSET ?`
+      )
+      .all(...f.params, limit, (page - 1) * limit);
 
-/** GET /api/voters/verify-epic?epic_id=… — registration EPIC check */
-router.get('/verify-epic', requireRole(ROLES.A1, ROLES.A2), (req, res) => {
-  const epic = String(req.query.epic_id ?? req.query.epic ?? '').trim().toUpperCase();
-  if (!epic) return res.status(400).json({ error: 'EPIC ID is required' });
+    const shapedRows = await Promise.all(rows.map((r) => shapeVoter(r)));
 
-  const voter = db
-    .prepare(
-      `SELECT v.epic_id, v.name_ta, v.relative_name_ta, v.age, v.gender, v.door_no, v.is_deleted,
-              v.part_no, pp.local_body_name_ta, pp.ac_no, pp.ac_name_ta
-         FROM voters_master v JOIN polling_parts pp ON pp.part_no = v.part_no
-        WHERE UPPER(v.epic_id) = ?`
-    )
-    .get(epic);
-
-  if (!voter) {
-    return res.status(404).json({ verified: false, error: 'EPIC ID not found in the electoral roll' });
-  }
-  if (voter.is_deleted) {
-    return res.status(409).json({ verified: false, error: 'This EPIC ID is marked deleted in the roll' });
-  }
-
-  const taken = db.prepare('SELECT mobile_number FROM users WHERE UPPER(epic_id) = ?').get(epic);
-  res.json({
-    verified: true,
-    alreadyRegistered: !!taken,
-    registeredMobile: taken?.mobile_number ?? null,
-    voter: {
-      epicId: voter.epic_id,
-      nameTa: voter.name_ta,
-      relativeNameTa: voter.relative_name_ta,
-      age: voter.age,
-      gender: voter.gender,
-      doorNo: voter.door_no,
-      partNo: voter.part_no,
-      localBodyNameTa: voter.local_body_name_ta,
-      constituency: `AC ${voter.ac_no} - ${voter.ac_name_ta}`,
-    },
-  });
-});
-
-/** GET /api/voters/:epic — one elector with their survey (incl. custom fields), scope-checked */
-router.get('/:epic', (req, res) => {
-  const scope = buildPartFilter(req.user, 'v');
-  const epic = String(req.params.epic).trim().toUpperCase();
-  const row = db
-    .prepare(`SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE UPPER(v.epic_id) = ? AND ${scope.sql}`)
-    .get(epic, ...scope.params);
-
-  if (!row) {
-    const exists = db.prepare('SELECT 1 FROM voters_master WHERE UPPER(epic_id) = ?').get(epic);
-    return res.status(exists ? 403 : 404).json({
-      error: exists ? 'This elector is outside your assigned booths' : 'No elector found with this EPIC number',
+    res.json({
+      rows: shapedRows,
+      total,
+      page,
+      limit,
+      pages: Math.max(1, Math.ceil(total / limit)),
+      sortBy: sortKey,
+      sortDir: sortDir.toLowerCase(),
     });
+  } catch (err) {
+    next(err);
   }
-  res.json(shapeVoter(row, { includeCustomFields: true }));
+});
+
+/** GET /api/voters/verify-epic?epic_id=… */
+router.get('/verify-epic', requireRole(ROLES.A1, ROLES.A2), async (req, res, next) => {
+  try {
+    const epic = String(req.query.epic_id ?? req.query.epic ?? '').trim().toUpperCase();
+    if (!epic) return res.status(400).json({ error: 'EPIC ID is required' });
+
+    const voter = await db
+      .prepare(
+        `SELECT v.epic_id, v.name_ta, v.relative_name_ta, v.age, v.gender, v.door_no, v.is_deleted,
+                v.part_no, pp.local_body_name_ta, pp.ac_no, pp.ac_name_ta
+           FROM voters_master v JOIN polling_parts pp ON pp.part_no = v.part_no
+          WHERE UPPER(v.epic_id) = ?`
+      )
+      .get(epic);
+
+    if (!voter) {
+      return res.status(404).json({ verified: false, error: 'EPIC ID not found in the electoral roll' });
+    }
+    if (voter.is_deleted) {
+      return res.status(409).json({ verified: false, error: 'This EPIC ID is marked deleted in the roll' });
+    }
+
+    const taken = await db.prepare('SELECT mobile_number FROM users WHERE UPPER(epic_id) = ?').get(epic);
+    res.json({
+      verified: true,
+      alreadyRegistered: !!taken,
+      registeredMobile: taken?.mobile_number ?? null,
+      voter: {
+        epicId: voter.epic_id,
+        nameTa: voter.name_ta,
+        relativeNameTa: voter.relative_name_ta,
+        age: voter.age,
+        gender: voter.gender,
+        doorNo: voter.door_no,
+        partNo: voter.part_no,
+        localBodyNameTa: voter.local_body_name_ta,
+        constituency: `AC ${voter.ac_no} - ${voter.ac_name_ta}`,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/voters/:epic */
+router.get('/:epic', async (req, res, next) => {
+  try {
+    const scope = await buildPartFilter(req.user, 'v');
+    const epic = String(req.params.epic).trim().toUpperCase();
+    const row = await db
+      .prepare(`SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE UPPER(v.epic_id) = ? AND ${scope.sql}`)
+      .get(epic, ...scope.params);
+
+    if (!row) {
+      const exists = await db.prepare('SELECT 1 FROM voters_master WHERE UPPER(epic_id) = ?').get(epic);
+      return res.status(exists ? 403 : 404).json({
+        error: exists ? 'This elector is outside your assigned booths' : 'No elector found with this EPIC number',
+      });
+    }
+    res.json(await shapeVoter(row, { includeCustomFields: true }));
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
- * POST /api/voters/survey/submit — A1, A2 (correction/oversight) and A3
- * (the original field flow). Uses an UPSERT keyed on epic_id, so re-surveying
- * an elector updates their record instead of creating a duplicate.
- *
- * The agent credited with a survey (`surveyed_by`) is never overwritten by an
- * admin's edit — that would erase who actually did the fieldwork. An admin's
- * touch is recorded separately in `last_updated_by` instead.
+ * POST /api/voters/survey/submit
  */
-router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), (req, res) => {
-  const b = req.body ?? {};
-  const epic = String(b.epicId ?? b.epic_id ?? '').trim().toUpperCase();
-  const correctedName = String(b.correctedNameTa ?? b.corrected_name_ta ?? '').trim() || null;
-  const correctedRelative = String(b.correctedRelativeNameTa ?? b.corrected_relative_name_ta ?? '').trim() || null;
-  const phone = String(b.phoneNumber ?? b.phone_number ?? '').trim();
-  const casteId = b.casteId ?? b.caste_id ? Number(b.casteId ?? b.caste_id) : null;
-  const jobId = b.jobId ?? b.job_id ? Number(b.jobId ?? b.job_id) : null;
-  const partyId = b.partyId ?? b.party_id ? Number(b.partyId ?? b.party_id) : null;
-  const educationId = b.educationId ?? b.education_id ? Number(b.educationId ?? b.education_id) : null;
-  const otherJobText = String(b.otherJobText ?? b.other_job_text ?? '').trim() || null;
-  const remarks = String(b.remarks ?? '').trim() || null;
-  const customFields = b.customFields && typeof b.customFields === 'object' ? b.customFields : {};
+router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (req, res, next) => {
+  try {
+    const b = req.body ?? {};
+    const epic = String(b.epicId ?? b.epic_id ?? '').trim().toUpperCase();
+    const correctedName = String(b.correctedNameTa ?? b.corrected_name_ta ?? '').trim() || null;
+    const correctedRelative = String(b.correctedRelativeNameTa ?? b.corrected_relative_name_ta ?? '').trim() || null;
+    const phone = String(b.phoneNumber ?? b.phone_number ?? '').trim();
+    const casteId = b.casteId ?? b.caste_id ? Number(b.casteId ?? b.caste_id) : null;
+    const jobId = b.jobId ?? b.job_id ? Number(b.jobId ?? b.job_id) : null;
+    const partyId = b.partyId ?? b.party_id ? Number(b.partyId ?? b.party_id) : null;
+    const educationId = b.educationId ?? b.education_id ? Number(b.educationId ?? b.education_id) : null;
+    const otherJobText = String(b.otherJobText ?? b.other_job_text ?? '').trim() || null;
+    const remarks = String(b.remarks ?? '').trim() || null;
+    const customFields = b.customFields && typeof b.customFields === 'object' ? b.customFields : {};
 
-  const fields = {};
-  if (!epic) fields.epicId = 'EPIC number is required';
-  if (phone && !PHONE_RE.test(phone)) fields.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
-  if (Object.keys(fields).length) {
-    return res.status(400).json({ error: 'Please correct the invalid fields', fields });
-  }
-
-  const scope = buildPartFilter(req.user, 'v');
-  const voter = db
-    .prepare(`SELECT v.epic_id, v.is_deleted FROM voters_master v WHERE UPPER(v.epic_id) = ? AND ${scope.sql}`)
-    .get(epic, ...scope.params);
-  if (!voter) {
-    const exists = db.prepare('SELECT 1 FROM voters_master WHERE UPPER(epic_id) = ?').get(epic);
-    return res.status(exists ? 403 : 404).json({
-      error: exists ? 'This elector is outside your assigned booth' : 'No elector found with this EPIC number',
-    });
-  }
-  if (voter.is_deleted) {
-    return res.status(409).json({ error: 'This elector is marked deleted in the roll and cannot be surveyed' });
-  }
-
-  for (const [table, id, field, label] of [
-    ['caste_master', casteId, 'casteId', 'caste'],
-    ['job_master', jobId, 'jobId', 'occupation'],
-    ['party_master', partyId, 'partyId', 'party'],
-  ]) {
-    if (id && !db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND is_active = 1`).get(id)) {
-      return res.status(422).json({ error: `Selected ${label} is no longer available`, fields: { [field]: 'Unavailable' } });
+    const fields = {};
+    if (!epic) fields.epicId = 'EPIC number is required';
+    if (phone && !PHONE_RE.test(phone)) fields.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
+    if (Object.keys(fields).length) {
+      return res.status(400).json({ error: 'Please correct the invalid fields', fields });
     }
-  }
-  if (educationId && !db.prepare('SELECT 1 FROM education_master WHERE id = ? AND is_active = 1').get(educationId)) {
-    return res.status(422).json({ error: 'Selected education level is no longer available', fields: { educationId: 'Unavailable' } });
-  }
 
-  // Every active, required custom field must have a non-empty answer; a value
-  // for an inactive/unknown field id is silently ignored (a form the A1
-  // disabled mid-survey shouldn't block submission).
-  const activeDefs = db.prepare('SELECT id, label, field_type, is_required, options_json FROM survey_field_defs WHERE is_active = 1').all();
-  const customFieldErrors = {};
-  for (const def of activeDefs) {
-    const raw = customFields[def.id];
-    const value = raw === undefined || raw === null ? '' : String(raw).trim();
-    if (def.is_required && !value) {
-      customFieldErrors[`custom_${def.id}`] = `${def.label} is required`;
-      continue;
+    const scope = await buildPartFilter(req.user, 'v');
+    const voter = await db
+      .prepare(`SELECT v.epic_id, v.is_deleted FROM voters_master v WHERE UPPER(v.epic_id) = ? AND ${scope.sql}`)
+      .get(epic, ...scope.params);
+    if (!voter) {
+      const exists = await db.prepare('SELECT 1 FROM voters_master WHERE UPPER(epic_id) = ?').get(epic);
+      return res.status(exists ? 403 : 404).json({
+        error: exists ? 'This elector is outside your assigned booth' : 'No elector found with this EPIC number',
+      });
     }
-    if (value && def.field_type === 'select') {
-      const options = JSON.parse(def.options_json || '[]');
-      if (!options.includes(value)) {
-        customFieldErrors[`custom_${def.id}`] = `Invalid option for ${def.label}`;
+    if (voter.is_deleted) {
+      return res.status(409).json({ error: 'This elector is marked deleted in the roll and cannot be surveyed' });
+    }
+
+    for (const [table, id, field, label] of [
+      ['caste_master', casteId, 'casteId', 'caste'],
+      ['job_master', jobId, 'jobId', 'occupation'],
+      ['party_master', partyId, 'partyId', 'party'],
+    ]) {
+      if (id && !await db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND is_active = 1`).get(id)) {
+        return res.status(422).json({ error: `Selected ${label} is no longer available`, fields: { [field]: 'Unavailable' } });
       }
     }
-    if (value && def.field_type === 'number' && Number.isNaN(Number(value))) {
-      customFieldErrors[`custom_${def.id}`] = `${def.label} must be a number`;
+    if (educationId && !await db.prepare('SELECT 1 FROM education_master WHERE id = ? AND is_active = 1').get(educationId)) {
+      return res.status(422).json({ error: 'Selected education level is no longer available', fields: { educationId: 'Unavailable' } });
     }
-  }
-  if (Object.keys(customFieldErrors).length) {
-    return res.status(400).json({ error: 'Please correct the custom field values', fields: customFieldErrors });
-  }
 
-  const existing = db.prepare('SELECT epic_id, surveyed_by FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
-  const now = nowIso();
-  // A field agent's own credit is preserved even when an admin edits later;
-  // a brand-new record (by anyone) credits whoever is submitting it now.
-  const surveyedBy = existing ? existing.surveyed_by : req.user.id;
+    const activeDefs = await db.prepare('SELECT id, label, field_type, is_required, options_json FROM survey_field_defs WHERE is_active = 1').all();
+    const customFieldErrors = {};
+    for (const def of activeDefs) {
+      const raw = customFields[def.id];
+      const value = raw === undefined || raw === null ? '' : String(raw).trim();
+      if (def.is_required && !value) {
+        customFieldErrors[`custom_${def.id}`] = `${def.label} is required`;
+        continue;
+      }
+      if (value && def.field_type === 'select') {
+        const options = JSON.parse(def.options_json || '[]');
+        if (!options.includes(value)) {
+          customFieldErrors[`custom_${def.id}`] = `Invalid option for ${def.label}`;
+        }
+      }
+      if (value && def.field_type === 'number' && Number.isNaN(Number(value))) {
+        customFieldErrors[`custom_${def.id}`] = `${def.label} must be a number`;
+      }
+    }
+    if (Object.keys(customFieldErrors).length) {
+      return res.status(400).json({ error: 'Please correct the custom field values', fields: customFieldErrors });
+    }
 
-  db.exec('BEGIN');
-  try {
-    db.prepare(
+    const existing = await db.prepare('SELECT epic_id, surveyed_by FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
+    const surveyedBy = existing ? existing.surveyed_by : req.user.id;
+
+    await db.prepare(
       `INSERT INTO voter_surveys
          (epic_id, corrected_name_ta, corrected_relative_name_ta, phone_number,
           caste_id, job_id, party_id, education_id, other_job_text, remarks,
           surveyed_by, last_updated_by, surveyed_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(epic_id) DO UPDATE SET
-         corrected_name_ta = excluded.corrected_name_ta,
-         corrected_relative_name_ta = excluded.corrected_relative_name_ta,
-         phone_number = excluded.phone_number,
-         caste_id = excluded.caste_id,
-         job_id = excluded.job_id,
-         party_id = excluded.party_id,
-         education_id = excluded.education_id,
-         other_job_text = excluded.other_job_text,
-         remarks = excluded.remarks,
-         last_updated_by = excluded.last_updated_by,
-         updated_at = excluded.updated_at`
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
+       ON DUPLICATE KEY UPDATE
+         corrected_name_ta = VALUES(corrected_name_ta),
+         corrected_relative_name_ta = VALUES(corrected_relative_name_ta),
+         phone_number = VALUES(phone_number),
+         caste_id = VALUES(caste_id),
+         job_id = VALUES(job_id),
+         party_id = VALUES(party_id),
+         education_id = VALUES(education_id),
+         other_job_text = VALUES(other_job_text),
+         remarks = VALUES(remarks),
+         last_updated_by = VALUES(last_updated_by),
+         updated_at = NOW()`
     ).run(
       voter.epic_id, correctedName, correctedRelative, phone || '',
       casteId, jobId, partyId, educationId, otherJobText, remarks,
-      surveyedBy, req.user.id, now, now
+      surveyedBy, req.user.id
     );
 
     const upsertField = db.prepare(
       `INSERT INTO survey_field_values (epic_id, field_id, value) VALUES (?,?,?)
-       ON CONFLICT(epic_id, field_id) DO UPDATE SET value = excluded.value`
+       ON DUPLICATE KEY UPDATE value = VALUES(value)`
     );
     for (const def of activeDefs) {
       const raw = customFields[def.id];
       const value = raw === undefined || raw === null ? '' : String(raw).trim();
-      if (value) upsertField.run(voter.epic_id, def.id, value);
+      if (value) await upsertField.run(voter.epic_id, def.id, value);
     }
-    db.exec('COMMIT');
+
+    audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id, null);
+    invalidateDashboardCache();
+
+    const fresh = await db.prepare(`SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE v.epic_id = ?`).get(voter.epic_id);
+    const shapedVoter = await shapeVoter(fresh, { includeCustomFields: true });
+    res.json({
+      ok: true,
+      updated: !!existing,
+      message: existing ? 'Survey record updated' : 'Survey saved successfully',
+      voter: shapedVoter,
+    });
   } catch (err) {
-    db.exec('ROLLBACK');
-    return res.status(500).json({ error: 'Could not save the survey', detail: err.message });
+    next(err);
   }
-
-  audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id, null);
-  invalidateDashboardCache();
-
-  const fresh = db.prepare(`SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE v.epic_id = ?`).get(voter.epic_id);
-  res.json({
-    ok: true,
-    updated: !!existing,
-    message: existing ? 'Survey record updated' : 'Survey saved successfully',
-    voter: shapeVoter(fresh, { includeCustomFields: true }),
-  });
 });
 
 /**
- * DELETE /api/voters/surveys/all — A1 only, irreversibly wipes every survey
- * record in the constituency. Not linked from any UI; exists for a deliberate
- * data reset between demos/tests. Requires an explicit confirmation phrase in
- * the body so a stray or scripted call can never trigger it by accident.
+ * DELETE /api/voters/surveys/all
  */
-router.delete('/surveys/all', requireRole(ROLES.A1), (req, res) => {
-  if (req.body?.confirm !== 'DELETE ALL SURVEYS') {
-    return res.status(400).json({ error: 'Send { "confirm": "DELETE ALL SURVEYS" } to proceed. This cannot be undone.' });
+router.delete('/surveys/all', requireRole(ROLES.A1), async (req, res, next) => {
+  try {
+    if (req.body?.confirm !== 'DELETE ALL SURVEYS') {
+      return res.status(400).json({ error: 'Send { "confirm": "DELETE ALL SURVEYS" } to proceed. This cannot be undone.' });
+    }
+    await db.exec('DELETE FROM survey_field_values');
+    const info = await db.prepare('DELETE FROM voter_surveys').run();
+    audit(req.user.id, 'ALL_SURVEYS_CLEARED', 'voter_surveys', 'all', `${info.changes} surveys deleted`);
+    invalidateDashboardCache();
+    res.json({ ok: true, deleted: info.changes });
+  } catch (err) {
+    next(err);
   }
-  db.exec('DELETE FROM survey_field_values');
-  const info = db.prepare('DELETE FROM voter_surveys').run();
-  db.exec("DELETE FROM sync_outbox WHERE table_name = 'voter_surveys' OR table_name = 'survey_field_values'");
-  audit(req.user.id, 'ALL_SURVEYS_CLEARED', 'voter_surveys', 'all', `${info.changes} surveys deleted`);
-  invalidateDashboardCache();
-  res.json({ ok: true, deleted: info.changes });
 });
 
-/** DELETE /api/voters/survey/:epic — A1 only, to undo a bad record */
-router.delete('/survey/:epic', requireRole(ROLES.A1), (req, res) => {
-  const epic = String(req.params.epic).trim().toUpperCase();
-  const info = db.prepare('DELETE FROM voter_surveys WHERE UPPER(epic_id) = ?').run(epic);
-  if (!info.changes) return res.status(404).json({ error: 'No survey record for this EPIC' });
-  audit(req.user.id, 'SURVEY_DELETED', 'voter_survey', epic, null);
-  invalidateDashboardCache();
-  res.json({ ok: true });
+/** DELETE /api/voters/survey/:epic */
+router.delete('/survey/:epic', requireRole(ROLES.A1), async (req, res, next) => {
+  try {
+    const epic = String(req.params.epic).trim().toUpperCase();
+    const info = await db.prepare('DELETE FROM voter_surveys WHERE UPPER(epic_id) = ?').run(epic);
+    if (!info.changes) return res.status(404).json({ error: 'No survey record for this EPIC' });
+    audit(req.user.id, 'SURVEY_DELETED', 'voter_survey', epic, null);
+    invalidateDashboardCache();
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export { buildFilter, VOTER_COLUMNS, VOTER_JOINS, shapeVoter };
