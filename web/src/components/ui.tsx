@@ -47,6 +47,8 @@ interface ToastApi {
   push: (kind: Toast['kind'], title: string, msg?: string) => void;
   ok: (title: string, msg?: string) => void;
   bad: (title: string, msg?: string) => void;
+  warn: (title: string, msg?: string) => void;
+  info: (title: string, msg?: string) => void;
 }
 const ToastCtx = createContext<ToastApi | null>(null);
 
@@ -64,6 +66,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     push,
     ok: (t, m) => push('ok', t, m),
     bad: (t, m) => push('bad', t, m),
+    warn: (t, m) => push('warn', t, m),
+    info: (t, m) => push('info', t, m),
   }), [push]);
 
   return (

@@ -1,4 +1,4 @@
-import { createDatabaseBackup } from './backup.js';
+import { createDatabaseBackup, getISTParts } from './backup.js';
 
 // 3 times a day in IST (Asia/Kolkata, UTC+5:30):
 // 1. 08:00 AM IST (02:30 UTC) - Morning start
@@ -15,13 +15,14 @@ export function startBackupScheduler() {
   // Check every 60 seconds
   setInterval(async () => {
     try {
-      const now = new Date();
-      // Get IST time
-      const istString = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-      const istDate = new Date(istString);
-      const hour = istDate.getHours();
-      const minute = istDate.getMinutes();
-      const dateKey = istDate.toDateString();
+      // Reuses backup.js's Intl.DateTimeFormat-based IST extraction (matches
+      // the rest of the backup code) instead of round-tripping through
+      // toLocaleString() + `new Date(string)`, which depends on the runtime's
+      // locale string format to parse its own output back correctly.
+      const ist = getISTParts();
+      const hour = parseInt(ist.hour, 10);
+      const minute = parseInt(ist.minute, 10);
+      const dateKey = `${ist.year}-${ist.month}-${ist.day}`;
 
       // Check if current hour is one of the target hours and minute is in the first 5 minutes
       if (TARGET_HOURS_IST.includes(hour) && minute < 5) {

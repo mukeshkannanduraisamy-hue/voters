@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import {
-  Alert, Badge, Button, Card, CardHead, Empty, Input, PageHead, TableSkeleton, useToast
+  Alert, Badge, Button, Card, CardHead, ConfirmModal, Empty, Input, PageHead, Progress, TableSkeleton, useToast,
 } from '../components/ui';
-import { Icon } from '../components/icons';
 
 interface BackupItem {
   filename: string;
@@ -41,7 +40,8 @@ export default function Backups() {
   const [loading, setLoading] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<BackupItem | null>(null);
+  const [busyDelete, setBusyDelete] = useState(false);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const toast = useToast();
@@ -59,18 +59,16 @@ export default function Backups() {
     }
   };
 
-  useEffect(() => {
-    void load();
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   const handleTriggerBackup = async () => {
     setTriggering(true);
     try {
       await api.post('/api/admin/backups/trigger');
-      toast.show('New database backup snapshot created successfully!', 'ok');
+      toast.ok('Backup created', 'New database snapshot saved successfully.');
       await load();
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Failed to create backup', 'bad');
+      toast.bad('Could not create backup', err instanceof Error ? err.message : undefined);
     } finally {
       setTriggering(false);
     }
@@ -80,27 +78,26 @@ export default function Backups() {
     setDownloading(filename);
     try {
       await api.download(`/api/admin/backups/download/${filename}`, filename);
-      toast.show(`Downloaded ${filename}`, 'ok');
+      toast.ok('Download started', filename);
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Download failed', 'bad');
+      toast.bad('Download failed', err instanceof Error ? err.message : undefined);
     } finally {
       setDownloading(null);
     }
   };
 
-  const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete backup: ${filename}?`)) {
-      return;
-    }
-    setDeleting(filename);
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setBusyDelete(true);
     try {
-      await api.del(`/api/admin/backups/${filename}`);
-      toast.show(`Backup ${filename} deleted successfully.`, 'ok');
-      setBackups((prev) => (prev ? prev.filter((b) => b.filename !== filename) : []));
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : 'Failed to delete backup', 'bad');
-    } finally {
+      await api.del(`/api/admin/backups/${deleting.filename}`);
+      toast.ok('Backup deleted', deleting.filename);
+      setBackups((prev) => (prev ? prev.filter((b) => b.filename !== deleting.filename) : []));
       setDeleting(null);
+    } catch (err) {
+      toast.bad('Could not delete backup', err instanceof Error ? err.message : undefined);
+    } finally {
+      setBusyDelete(false);
     }
   };
 
@@ -121,188 +118,122 @@ export default function Backups() {
   return (
     <>
       <PageHead
-        eyebrow="System Administration"
         title="Database Backups & Automated Retention"
-        subtitle="Automated 3x daily MySQL snapshots (08:00 AM, 02:00 PM, 09:00 PM IST) with strict 3-day auto-deletion policy."
+        sub="Automated 3x daily MySQL snapshots (08:00 AM, 02:00 PM, 09:00 PM IST) with a strict 3-day auto-deletion policy"
         actions={
-          <div className="cluster">
-            <Button
-              variant="primary"
-              tone="brand"
-              onClick={handleTriggerBackup}
-              busy={triggering}
-              disabled={triggering}
-            >
-              <Icon name="save" size={16} />
-              <span>Create Backup Now</span>
+          <>
+            <Button icon="refresh" onClick={() => void load()} loading={loading}>Refresh</Button>
+            <Button variant="primary" icon="save" onClick={() => void handleTriggerBackup()} loading={triggering}>
+              Create Backup Now
             </Button>
-            <Button variant="outline" onClick={load} busy={loading} disabled={loading}>
-              <Icon name="refresh" size={16} />
-              <span>Refresh</span>
-            </Button>
-          </div>
+          </>
         }
       />
 
-      {error && <Alert tone="bad" title="Backup error">{error}</Alert>}
+      {error && <div className="mb-4"><Alert tone="bad"><strong>Backup error:</strong> {error}</Alert></div>}
 
-      {/* Backups Table */}
       <Card>
         <CardHead
           title="Backup Snapshots & Timeline"
-          subtitle="Complete database dumps with exact backup time, time elapsed, pack-up speed, and auto-delete countdowns."
-          actions={
-            <div className="cluster" style={{ minWidth: 260 }}>
-              <Input
-                placeholder="Search backups by time, name, slot…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </div>
-          }
+          sub="Complete database dumps with backup time, elapsed time, pack-up speed, and auto-delete countdowns"
+          icon="database"
+          actions={<Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search backups by time, name, slot…" style={{ width: 220 }} aria-label="Search backups" />}
         />
 
-        {loading && !backups ? (
-          <TableSkeleton cols={6} rows={4} />
-        ) : !filtered.length ? (
-          <Empty
-            icon="database"
-            title={q ? 'No matching backups' : 'No backups yet'}
-            message={
-              q
-                ? 'Try a different search query.'
-                : 'Click "Create Backup Now" above to generate your first snapshot.'
-            }
-          />
-        ) : (
-          <div className="table-responsive">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Backup File & Size</th>
-                  <th>Backup Time (IST)</th>
-                  <th>Time Passed (From Backup)</th>
-                  <th>Scheduled Deletion (3 Days)</th>
-                  <th>Retention Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((b) => {
-                  const isExpiringSoon = b.remainingHours <= 12;
-                  const isModerate = b.remainingHours <= 24;
+        <div className="card-body flush">
+          {loading && !backups ? (
+            <TableSkeleton cols={6} rows={4} />
+          ) : filtered.length === 0 ? (
+            <Empty icon="database" title={q ? 'No matching backups' : 'No backups yet'}>
+              {q ? 'Try a different search term.' : 'Click "Create Backup Now" above to generate your first snapshot.'}
+            </Empty>
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Backup file & size</th>
+                    <th>Backup time (IST)</th>
+                    <th>Time since backup</th>
+                    <th>Scheduled deletion (3 days)</th>
+                    <th style={{ width: 170 }}>Retention status</th>
+                    <th style={{ width: 190 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((b) => {
+                    const isExpiringSoon = b.remainingHours <= 12;
+                    const isModerate = b.remainingHours <= 24;
+                    const tone = isExpiringSoon ? 'bad' : isModerate ? 'warn' : 'ok';
 
-                  return (
-                    <tr key={b.filename}>
-                      <td>
-                        <div className="stack" style={{ gap: '4px' }}>
-                          <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 'var(--fs-xs)' }}>
-                            {b.filename}
-                          </span>
-                          <div className="cluster" style={{ gap: '6px' }}>
+                    return (
+                      <tr key={b.filename}>
+                        <td>
+                          <div className="mono t-xs t-semi">{b.filename}</div>
+                          <div className="row tight mt-2">
                             <Badge tone="brand">{b.sizeFormatted}</Badge>
-                            {b.packUpDurationSeconds && (
-                              <Badge tone="neutral">⚡ Packed in {b.packUpDurationSeconds}s</Badge>
-                            )}
+                            {!!b.packUpDurationSeconds && <Badge tone="muted">Packed in {b.packUpDurationSeconds}s</Badge>}
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="stack" style={{ gap: '3px' }}>
-                          <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--brand-700)' }}>
+                        </td>
+                        <td>
+                          <div className="t-sm t-semi" style={{ color: 'var(--brand-700)' }}>
                             {b.createdTimeFormatted || b.createdFormatted}
-                          </span>
-                          <span className="t-xs t-muted">{b.createdDateFormatted || 'Asia/Kolkata (IST)'}</span>
-                          <Badge tone="neutral" style={{ width: 'fit-content' }}>
-                            {b.slot || 'Automated Snapshot'}
-                          </Badge>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="stack" style={{ gap: '3px' }}>
-                          <Badge tone="neutral" style={{ width: 'fit-content' }}>
-                            <Icon name="clock" size={12} />
-                            <span style={{ fontWeight: 600 }}>{b.timeAgo || 'Just now'}</span>
-                          </Badge>
-                          <span className="t-xs t-muted">Elapsed from backup</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="stack" style={{ gap: '2px' }}>
-                          <span style={{ fontWeight: 600, color: isExpiringSoon ? 'var(--red-600)' : undefined }}>
-                            {b.expiresTimeFormatted ? `${b.expiresTimeFormatted}` : b.expiresAtFormatted}
-                          </span>
-                          <span className="t-xs t-muted">{b.expiresDateFormatted || b.expiresAtFormatted} (72h limit)</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="stack" style={{ gap: '4px', minWidth: 140 }}>
-                          <Badge tone={isExpiringSoon ? 'bad' : isModerate ? 'warn' : 'ok'}>
-                            <Icon name="clock" size={12} />
-                            <span>{b.remainingLabel}</span>
-                          </Badge>
-                          <div
-                            style={{
-                              width: '100%',
-                              height: 6,
-                              background: 'var(--slate-200)',
-                              borderRadius: 3,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${Math.min(100, Math.max(0, b.elapsedPercent || 0))}%`,
-                                height: '100%',
-                                background: isExpiringSoon
-                                  ? 'var(--red-500)'
-                                  : isModerate
-                                  ? 'var(--amber-500)'
-                                  : 'var(--brand-500)',
-                              }}
+                          </div>
+                          <div className="t-xs t-muted">{b.createdDateFormatted || 'Asia/Kolkata (IST)'}</div>
+                          <Badge tone="muted">{b.slot || 'Automated Snapshot'}</Badge>
+                        </td>
+                        <td>
+                          <Badge tone="muted" dot>{b.timeAgo || 'Just now'}</Badge>
+                          <div className="t-xs t-muted mt-2">Elapsed from backup</div>
+                        </td>
+                        <td>
+                          <div className="t-sm t-semi" style={{ color: isExpiringSoon ? 'var(--bad-600)' : undefined }}>
+                            {b.expiresTimeFormatted || b.expiresAtFormatted}
+                          </div>
+                          <div className="t-xs t-muted">{b.expiresDateFormatted || b.expiresAtFormatted} (72h limit)</div>
+                        </td>
+                        <td>
+                          <div className="stack tight" style={{ minWidth: 140 }}>
+                            <Badge tone={tone} dot>{b.remainingLabel}</Badge>
+                            <Progress value={b.elapsedPercent} tone={tone} />
+                            <span className="t-xs t-subtle">{b.elapsedPercent}% of 72h passed</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="actions">
+                            <Button
+                              size="sm" variant="primary" icon="download"
+                              onClick={() => void handleDownload(b.filename)}
+                              loading={downloading === b.filename}
+                              disabled={downloading === b.filename || deleting?.filename === b.filename}
+                              title="Download the .sql.gz backup file"
+                            >
+                              Download
+                            </Button>
+                            <Button
+                              size="sm" variant="danger-soft" icon="trash" aria-label="Delete"
+                              onClick={() => setDeleting(b)}
+                              disabled={downloading === b.filename}
+                              title="Delete this backup immediately"
                             />
                           </div>
-                          <span className="t-xs t-muted" style={{ fontSize: '11px' }}>
-                            {b.elapsedPercent}% of 72h passed
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="cluster" style={{ justifyContent: 'flex-end', gap: 'var(--sp-2)' }}>
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            tone="brand"
-                            onClick={() => handleDownload(b.filename)}
-                            busy={downloading === b.filename}
-                            disabled={downloading === b.filename || deleting === b.filename}
-                            title="Download .sql.gz backup file to your computer"
-                          >
-                            <Icon name="download" size={14} />
-                            <span>Download</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            tone="bad"
-                            onClick={() => handleDelete(b.filename)}
-                            busy={deleting === b.filename}
-                            disabled={deleting === b.filename || downloading === b.filename}
-                            title="Manually delete this backup immediately"
-                          >
-                            <Icon name="trash" size={14} />
-                            <span>Delete</span>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </Card>
+
+      <ConfirmModal
+        open={!!deleting} danger title={`Delete "${deleting?.filename}"?`} confirmLabel="Delete"
+        busy={busyDelete}
+        message="This permanently removes the backup file from the server. This cannot be undone."
+        onCancel={() => setDeleting(null)} onConfirm={() => void handleDelete()}
+      />
     </>
   );
 }

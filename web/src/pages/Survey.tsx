@@ -242,7 +242,7 @@ export default function Survey() {
       return;
     }
 
-    // 2. Clipboard fallback (if user copied from contacts or dialer)
+    // 2. Clipboard fallback (if user already copied a number from Contacts/dialer)
     if (navigator.clipboard && navigator.clipboard.readText) {
       try {
         const text = await navigator.clipboard.readText();
@@ -262,10 +262,27 @@ export default function Survey() {
       }
     }
 
-    // 3. Informational guidance for unsupported browsers/devices
+    // 3. Android fallback: the JS Contact Picker API is Chrome/Edge-on-Android
+    // only, but ANY Android browser can be told to navigate to an `intent://`
+    // URL — the OS intercepts that navigation and opens the device's actual
+    // default Contacts app at its native "pick a phone number" screen. This
+    // can't hand the selection back to the page (no such channel exists
+    // outside the Web API), so we guide the agent to copy the number there
+    // and come straight back — the clipboard check above will then pick it
+    // up automatically on their next tap of this same button.
+    if (/Android/i.test(navigator.userAgent)) {
+      toast.info('Opening Contacts…', 'Pick the voter, copy their number, then tap "Contacts" again to import it.');
+      window.location.href =
+        'intent://contacts/#Intent;action=android.intent.action.PICK;type=vnd.android.cursor.dir/phone_v2;scheme=content;end';
+      return;
+    }
+
+    // 4. iOS / desktop: no browser API or URI scheme can open the native
+    // Contacts app from a webpage here — genuinely not possible outside
+    // Android's intent mechanism, so the honest fallback is manual copy/paste.
     toast.info(
       'Device Contacts (தொடர்புகள்)',
-      'Contact picker directly opens your device Contacts app on Android Chrome. On other devices, copy the number from Contacts and paste here.'
+      'This browser can’t open Contacts directly. Copy the number from your Contacts app, then tap "Contacts" here again to paste it in.'
     );
   };
 

@@ -158,7 +158,12 @@ let newCasteId = null, newJobId = null, newPartyId = null;
   check('A1 creates a caste with a category', mkCaste.status === 201 && mkCaste.data.category === 'MBC', JSON.stringify(mkCaste.data).slice(0, 160));
   newCasteId = mkCaste.data?.id;
   check('duplicate caste rejected 409', (await api('POST', '/api/masters/caste', { token: T1, body: { name: mkCaste.data.name } })).status === 409);
-  check('invalid category rejected 400', (await api('POST', '/api/masters/caste', { token: T1, body: { name: 'ZZ Bad ' + Date.now(), category: 'NOPE' } })).status === 400);
+  // Reservation category is no longer a strict enum gate — an unrecognized
+  // value is accepted and silently normalized to 'OTHER' rather than
+  // rejected, matching the "remove reservation category" simplification.
+  const mkBadCategory = await api('POST', '/api/masters/caste', { token: T1, body: { name: 'ZZ Bad Category ' + Date.now(), category: 'NOPE' } });
+  check('unrecognized category falls back to OTHER (201)', mkBadCategory.status === 201 && mkBadCategory.data.category === 'OTHER', JSON.stringify(mkBadCategory.data).slice(0, 160));
+  if (mkBadCategory.data?.id) await api('DELETE', `/api/masters/caste/${mkBadCategory.data.id}`, { token: T1 });
 
   // ---- job, two-tier
   const jobGrouped = await api('GET', '/api/masters/job?grouped=1', { token: T1 });
