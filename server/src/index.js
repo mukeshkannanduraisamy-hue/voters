@@ -43,7 +43,8 @@ for (const envFile of [path.resolve(__dirname, '../.env'), path.resolve(__dirnam
 
 const PORT = Number(process.env.PORT) || 4000;
 
-await migrate();
+// Non-blocking initialization so require() in LiteSpeed/lsnode.js succeeds without ERR_REQUIRE_ASYNC_MODULE
+migrate().catch(err => console.warn('[db migrate warning]', err?.message));
 
 const app = express();
 app.disable('x-powered-by');
@@ -139,3 +140,6 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.log(`\n  VMS API (Direct MySQL)  ->  http://localhost:${PORT} (ready)`);
   }
 });
+
+export { app };
+export default app;
