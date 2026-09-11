@@ -130,8 +130,8 @@ export default function Survey() {
     seededFor.current = key;
     setAnswers(seedAnswers(voter, schema));
     setCorrections({
-      correctedNameTa: voter.survey?.correctedNameTa ?? '',
-      correctedRelativeNameTa: voter.survey?.correctedRelativeNameTa ?? '',
+      correctedNameTa: voter.survey?.correctedNameTa || voter.nameTa || '',
+      correctedRelativeNameTa: voter.survey?.correctedRelativeNameTa || voter.relativeNameTa || '',
     });
   }, [schema, voter]);
 
@@ -151,6 +151,10 @@ export default function Survey() {
   const selectVoter = (v: Voter) => {
     seededFor.current = '';   // force the seeding effect to run for this record
     setVoter(v);
+    setCorrections({
+      correctedNameTa: v.survey?.correctedNameTa || v.nameTa || '',
+      correctedRelativeNameTa: v.survey?.correctedRelativeNameTa || v.relativeNameTa || '',
+    });
     setErrors({});
     setSaveError('');
     setParams({ epic: v.epicId }, { replace: true });
@@ -461,8 +465,8 @@ export default function Survey() {
                 onClick={() => {
                   setAnswers(seedAnswers(voter, schema));
                   setCorrections({
-                    correctedNameTa: voter.survey?.correctedNameTa ?? '',
-                    correctedRelativeNameTa: voter.survey?.correctedRelativeNameTa ?? '',
+                    correctedNameTa: voter.survey?.correctedNameTa || voter.nameTa || '',
+                    correctedRelativeNameTa: voter.survey?.correctedRelativeNameTa || voter.relativeNameTa || '',
                   });
                   setErrors({}); setSaveError('');
                 }}

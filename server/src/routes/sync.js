@@ -11,7 +11,7 @@ router.get('/status', requireRole(ROLES.A1), (req, res) => {
     apiUrl: null,
     directMySql: true,
     host: process.env.DB_HOST || 'srv1497.hstgr.io',
-    database: process.env.DB_NAME || 'u403881955_ECL',
+    database: process.env.DB_NAME || 'u403881955_vms',
     tablePrefix: 'vms_',
     status: 'connected',
     pending: 0,

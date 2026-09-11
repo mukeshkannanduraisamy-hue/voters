@@ -55,15 +55,15 @@ export interface ManagedUser {
   jurisdictions: JurisdictionBooth[];
 }
 
-export type CustomFieldType = 'text' | 'number' | 'date' | 'select';
+export type CustomFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'radio' | 'checkbox' | 'multiselect' | 'toggle' | 'heading' | 'divider' | 'note';
 
 export interface CustomFieldAnswer {
-  fieldId: number;
   key: string;
   label: string;
   labelTa: string | null;
   fieldType: CustomFieldType;
   isActive: boolean;
+  orphaned: boolean;
   value: string | null;
 }
 

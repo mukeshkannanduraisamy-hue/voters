@@ -39,8 +39,11 @@ export function translateSql(sql) {
   s = s.replace(/datetime\('now'\)/gi, 'NOW()');
   s = s.replace(/ON CONFLICT\s*\([^)]*\)\s*DO UPDATE SET/gi, 'ON DUPLICATE KEY UPDATE');
   s = s.replace(/excluded\.(\w+)/gi, 'VALUES($1)');
-  s = s.replace(/ON CONFLICT\s*\([^)]*\)\s*DO NOTHING/gi, 'ON DUPLICATE KEY UPDATE id=id');
-  s = s.replace(/ON CONFLICT\s+DO NOTHING/gi, 'ON DUPLICATE KEY UPDATE id=id');
+  s = s.replace(/ON CONFLICT\s*\((\w+)[^)]*\)\s*DO NOTHING/gi, 'ON DUPLICATE KEY UPDATE $1=$1');
+  s = s.replace(/ON CONFLICT\s+DO NOTHING/gi, (match) => {
+    const m = s.match(/INSERT\s+INTO\s+\S+\s*\((\w+)/i);
+    return `ON DUPLICATE KEY UPDATE ${m ? m[1] : 'id'}=${m ? m[1] : 'id'}`;
+  });
   s = s.replace(/COLLATE\s+NOCASE/gi, '');
   return s;
 }

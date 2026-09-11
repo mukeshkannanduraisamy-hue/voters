@@ -478,6 +478,7 @@ router.delete('/surveys/all', requireRole(ROLES.A1), async (req, res, next) => {
       return res.status(400).json({ error: 'Send { "confirm": "DELETE ALL SURVEYS" } to proceed. This cannot be undone.' });
     }
     await db.exec('DELETE FROM survey_field_values');
+    await db.exec('DELETE FROM vms_survey_answers');
     const info = await db.prepare('DELETE FROM voter_surveys').run();
     audit(req.user.id, 'ALL_SURVEYS_CLEARED', 'voter_surveys', 'all', `${info.changes} surveys deleted`);
     invalidateDashboardCache();
@@ -493,6 +494,7 @@ router.delete('/survey/:epic', requireRole(ROLES.A1), async (req, res, next) => 
     const epic = String(req.params.epic).trim().toUpperCase();
     const info = await db.prepare('DELETE FROM voter_surveys WHERE UPPER(epic_id) = ?').run(epic);
     if (!info.changes) return res.status(404).json({ error: 'No survey record for this EPIC' });
+    await db.prepare('DELETE FROM vms_survey_answers WHERE UPPER(epic_id) = ?').run(epic);
     audit(req.user.id, 'SURVEY_DELETED', 'voter_survey', epic, null);
     invalidateDashboardCache();
     res.json({ ok: true });

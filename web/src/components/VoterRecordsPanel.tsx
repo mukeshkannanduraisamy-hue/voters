@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, api, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import type { BoothTree, Directory, Dropdowns, FormFieldDef, Voter } from '../lib/types';
+import type { BoothTree, Directory, Voter } from '../lib/types';
 import {
   Alert, Badge, Button, Card, CardHead, Empty, Field, Input, Modal, Pager,
   PhoneInput, Segmented, Select, TableSkeleton, Textarea, fmt, fmtDate, useToast,
@@ -34,7 +34,6 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
 
   const [data, setData] = useState<Directory | null>(null);
   const [tree, setTree] = useState<BoothTree | null>(null);
-  const [drops, setDrops] = useState<Dropdowns | null>(null);
   const [schema, setSchema] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,7 +63,6 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
 
   useEffect(() => {
     api.get<BoothTree>('/api/booths').then(setTree).catch(() => { /* filters degrade to text search */ });
-    api.get<Dropdowns>('/api/masters/dropdowns').then(setDrops).catch(() => { /* edit modal degrades */ });
     api.get<FormSchema>('/api/form-schema/published').then(setSchema).catch(() => { /* edit modal degrades */ });
   }, []);
 
@@ -419,7 +417,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
               <Cell k="Surveyed at" v={fmtDate(s.surveyedAt, true)} />
               {s.lastEditorName && s.lastEditorName !== s.agentName && <Cell k="Last edited by" v={s.lastEditorName} />}
               {(s.customFields ?? []).filter((cf) => cf.value).map((cf) => (
-                <Cell key={cf.fieldId} k={cf.labelTa ? `${cf.label} (${cf.labelTa})` : cf.label} v={cf.value ?? '—'} ta />
+                <Cell key={cf.key} k={cf.labelTa ? `${cf.label} (${cf.labelTa})` : cf.label} v={cf.value ?? '—'} ta />
               ))}
             </div>
           </div>
@@ -445,8 +443,8 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
   const toast = useToast();
   const s = voter.survey;
 
-  const [correctedNameTa, setCorrectedNameTa] = useState(s?.correctedNameTa ?? voter.nameTa ?? '');
-  const [correctedRelativeNameTa, setCorrectedRelativeNameTa] = useState(s?.correctedRelativeNameTa ?? voter.relativeNameTa ?? '');
+  const [correctedNameTa, setCorrectedNameTa] = useState(s?.correctedNameTa || voter.nameTa || '');
+  const [correctedRelativeNameTa, setCorrectedRelativeNameTa] = useState(s?.correctedRelativeNameTa || voter.relativeNameTa || '');
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
