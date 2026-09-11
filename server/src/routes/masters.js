@@ -259,13 +259,19 @@ router.post('/job', requireRole(ROLES.A1), async (req, res, next) => {
   try {
     const category = String(req.body?.category ?? '').trim();
     const categoryTa = String(req.body?.category_ta ?? '').trim() || null;
-    const name = String(req.body?.name ?? '').trim();
-    const nameTa = String(req.body?.name_ta ?? '').trim() || null;
+    let name = String(req.body?.name ?? '').trim();
+    let nameTa = String(req.body?.name_ta ?? '').trim() || null;
     const isActive = req.body?.is_active === false ? 0 : 1;
 
     const fields = {};
-    if (category.length < 2) fields.category = 'Choose or enter a sector';
-    if (name.length < 2) fields.name = 'Sub-job name must be at least 2 characters';
+    if (!category) fields.category = 'Choose or enter a sector';
+    // Sub-job name is optional — defaults to nameTa, category or sector
+    if (!name) {
+      name = nameTa || category;
+    }
+    if (!nameTa && categoryTa) {
+      nameTa = categoryTa;
+    }
     if (Object.keys(fields).length) return res.status(400).json({ error: 'Please correct the highlighted fields', fields });
 
     const existing = await db.prepare('SELECT 1 FROM job_master WHERE category = ? AND name = ? COLLATE NOCASE').get(category, name);
@@ -290,11 +296,14 @@ router.patch('/job/:id', requireRole(ROLES.A1), async (req, res, next) => {
 
     const sets = [], params = [];
     const nextCategory = req.body?.category !== undefined ? String(req.body.category).trim() : existing.category;
-    const nextName = req.body?.name !== undefined ? String(req.body.name).trim() : existing.name;
+    let nextName = req.body?.name !== undefined ? String(req.body.name).trim() : existing.name;
+    const nextNameTa = req.body?.name_ta !== undefined ? String(req.body.name_ta).trim() || null : existing.name_ta;
+
+    if (!nextName) {
+      nextName = nextNameTa || nextCategory || existing.name;
+    }
 
     if (req.body?.category !== undefined || req.body?.name !== undefined) {
-      if (nextName.length < 2) return res.status(400).json({ error: 'Name must be at least 2 characters', fields: { name: 'Too short' } });
-      if (nextCategory.length < 2) return res.status(400).json({ error: 'Sector must be at least 2 characters', fields: { category: 'Too short' } });
       const clash = await db.prepare('SELECT 1 FROM job_master WHERE category = ? AND name = ? COLLATE NOCASE AND id <> ?')
         .get(nextCategory, nextName, id);
       if (clash) return res.status(409).json({ error: `"${nextName}" already exists in ${nextCategory}`, fields: { name: 'Already exists in this sector' } });
@@ -302,7 +311,7 @@ router.patch('/job/:id', requireRole(ROLES.A1), async (req, res, next) => {
       params.push(nextCategory, nextName);
     }
     if (req.body?.category_ta !== undefined) { sets.push('category_ta = ?'); params.push(String(req.body.category_ta).trim() || null); }
-    if (req.body?.name_ta !== undefined) { sets.push('name_ta = ?'); params.push(String(req.body.name_ta).trim() || null); }
+    if (req.body?.name_ta !== undefined) { sets.push('name_ta = ?'); params.push(nextNameTa); }
     if (req.body?.is_active !== undefined) { sets.push('is_active = ?'); params.push(req.body.is_active ? 1 : 0); }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
 

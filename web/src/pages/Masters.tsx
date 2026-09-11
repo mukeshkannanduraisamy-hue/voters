@@ -603,14 +603,17 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
 
   const save = async () => {
     setError('');
-    if (name.trim().length < 2) { setError('Sub-job name must be at least 2 characters.'); return; }
-    if (category.trim().length < 2) { setError('Choose or enter a main sector.'); return; }
+    if (!category.trim()) { setError('Choose or enter a main sector.'); return; }
+    // Sub-job title is optional — defaults to nameTa, category or sector name if omitted
+    const effectiveName = name.trim() || nameTa.trim() || category.trim();
+    const effectiveNameTa = nameTa.trim() || categoryTa.trim() || '';
+
     setSaving(true);
     try {
-      const body = { category: category.trim(), category_ta: categoryTa.trim(), name: name.trim(), name_ta: nameTa.trim(), is_active: active };
+      const body = { category: category.trim(), category_ta: categoryTa.trim(), name: effectiveName, name_ta: effectiveNameTa, is_active: active };
       if (isNew) await api.post('/api/masters/job', body);
       else await api.patch(`/api/masters/job/${row!.id}`, body);
-      toast.ok(isNew ? 'Sub-job added' : 'Sub-job updated', `${category} › ${name}`);
+      toast.ok(isNew ? 'Sub-job added' : 'Sub-job updated', `${category} › ${effectiveName}`);
       onSaved();
     } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not save'); }
     finally { setSaving(false); }
@@ -642,10 +645,10 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
           </Field>
         )}
 
-        <Field label="2. Sub-job title (English)">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Silk Weaver" />
+        <Field label="2. Sub-job title (English) (Optional)" hint="Optional — leave blank to use the sector name">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={category ? `e.g. ${category}` : 'e.g. Silk Weaver'} />
         </Field>
-        <Field label="Sub-job title (Tamil)">
+        <Field label="Sub-job title (Tamil) (Optional)">
           <Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} placeholder="பட்டு நெசவாளர்" />
         </Field>
         <Field label="Status"><Switch checked={active} onChange={setActive} label={active ? 'Active' : 'Disabled'} /></Field>
