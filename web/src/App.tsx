@@ -9,7 +9,7 @@ import Users from './pages/Users';
 import CreateUser from './pages/CreateUser';
 import Masters from './pages/Masters';
 import Voters from './pages/Voters';
-import FormFields from './pages/FormFields';
+import FormBuilder from './pages/FormBuilder';
 import Analytics from './pages/Analytics';
 import Audit from './pages/Audit';
 import Backups from './pages/Backups';
@@ -95,7 +95,7 @@ export default function App() {
             <Route path="/admin/users"        element={<Guard roles={ADMINS}><Users /></Guard>} />
             <Route path="/admin/users/create" element={<Guard roles={ADMINS}><CreateUser /></Guard>} />
             <Route path="/admin/masters"      element={<Guard roles={['A1_SUPER_ADMIN']}><Masters /></Guard>} />
-            <Route path="/admin/form-fields"  element={<Guard roles={['A1_SUPER_ADMIN']}><FormFields /></Guard>} />
+            <Route path="/admin/form-builder" element={<Guard roles={['A1_SUPER_ADMIN']}><FormBuilder /></Guard>} />
             <Route path="/admin/audit"        element={<Guard roles={['A1_SUPER_ADMIN']}><Audit /></Guard>} />
             <Route path="/admin/backups"      element={<Guard roles={['A1_SUPER_ADMIN']}><Backups /></Guard>} />
             <Route path="/analytics"          element={<Guard roles={ADMINS}><Analytics /></Guard>} />

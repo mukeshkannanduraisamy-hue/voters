@@ -426,70 +426,17 @@ let newEducationId = null;
   check('disabled education level disappears from dropdowns', !afterDisable.data.educationLevels.some((e) => e.id === newEducationId));
 }
 
-// ───────────────────────────────── custom survey form fields (A1 form builder)
-section('Custom survey form fields (A1 form builder)');
-let newFieldId = null;
+// ───────────────────────────────── dynamic survey form (schema-driven)
+// The old /api/form-fields engine was replaced by the versioned Form Builder;
+// its behaviour is covered end to end by scripts/test-form-builder.mjs.
+section('Dynamic survey form (schema-driven)');
 {
-  const baseDrops = (await api('GET', '/api/masters/dropdowns', { token: T3 })).data;
-  const baseSector = baseDrops.sectors[0];
-  const baseFields = { casteId: baseDrops.castes[0].id, jobId: baseSector.jobs[0].id, partyId: baseDrops.parties[0].id };
-
-  const activeForA3 = await api('GET', '/api/form-fields', { token: T3 });
-  check('A3 can read the active custom field list', activeForA3.status === 200 && Array.isArray(activeForA3.data));
-
-  check('A2 cannot manage form fields (403)', (await api('GET', '/api/form-fields/all', { token: T2 })).status === 403);
-  check('A3 cannot manage form fields (403)', (await api('GET', '/api/form-fields/all', { token: T3 })).status === 403);
-
-  const mk = await api('POST', '/api/form-fields', { token: T1, body: { label: 'ZZ Ration Card ' + Date.now(), field_type: 'select', options: 'APL, BPL, Antyodaya', is_required: false } });
-  check('A1 creates a custom select field', mk.status === 201 && !!mk.data.id, JSON.stringify(mk.data).slice(0, 200));
-  newFieldId = mk.data?.id;
-  check('select field auto-generates a slug key', /^[a-z][a-z0-9_]*$/.test(mk.data.key ?? ''), mk.data.key);
-  check('select field carries its options', Array.isArray(mk.data.options) && mk.data.options.includes('APL'));
-
-  check('select field with no options rejected 400', (await api('POST', '/api/form-fields', { token: T1, body: { label: 'ZZ Bad Select', field_type: 'select', options: '' } })).status === 400);
-  check('unknown field type rejected 400', (await api('POST', '/api/form-fields', { token: T1, body: { label: 'ZZ Bad Type', field_type: 'checkbox' } })).status === 400);
-
-  const afterCreate = await api('GET', '/api/form-fields', { token: T3 });
-  check('new active field appears in the agent-facing field list', afterCreate.data.some((f) => f.id === newFieldId));
-
-  const patched = await api('PATCH', `/api/form-fields/${newFieldId}`, { token: T1, body: { is_required: true, label: 'ZZ Ration Card Updated' } });
-  check('A1 edits a custom field', patched.status === 200 && patched.data.isRequired === true);
-
-  const submitNoAnswer = await api('POST', '/api/voters/survey/submit', {
-    token: T3,
-    body: {
-      epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
-      phoneNumber: '9845012345', ...baseFields,
-    },
-  });
-  check('submitting without a required custom field answer is rejected 400', submitNoAnswer.status === 400);
-
-  const submitWithAnswer = await api('POST', '/api/voters/survey/submit', {
-    token: T3,
-    body: { epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
-      phoneNumber: '9845012345', ...baseFields,
-      customFields: { [newFieldId]: 'BPL' } },
-  });
-  check('submitting a valid custom field answer succeeds', submitWithAnswer.status === 200 && submitWithAnswer.data.ok, JSON.stringify(submitWithAnswer.data).slice(0, 200));
-
-  const submitBadOption = await api('POST', '/api/voters/survey/submit', {
-    token: T3,
-    body: { epicId: a3Voter.epicId, correctedNameTa: 'சோதனை பெயர்', correctedRelativeNameTa: 'சோதனை தந்தை',
-      phoneNumber: '9845012345', ...baseFields,
-      customFields: { [newFieldId]: 'NOT_A_VALID_OPTION' } },
-  });
-  check('submitting an out-of-list select answer is rejected 400', submitBadOption.status === 400);
-
-  const moved = await api('POST', `/api/form-fields/${newFieldId}/move`, { token: T1, body: { direction: 'up' } });
-  check('A1 reorders a custom field', moved.status === 200, `got ${moved.status}`);
-
-  const blockedDelete = await api('DELETE', `/api/form-fields/${newFieldId}`, { token: T1 });
-  check('deleting a field already answered by a survey is blocked', blockedDelete.status === 409, `got ${blockedDelete.status}`);
-
-  const disabled = await api('PATCH', `/api/form-fields/${newFieldId}`, { token: T1, body: { is_active: false } });
-  check('A1 disables a custom field instead of deleting it', disabled.status === 200 && disabled.data.isActive === false);
-  const afterDisable = await api('GET', '/api/form-fields', { token: T3 });
-  check('disabled custom field disappears from the agent-facing list', !afterDisable.data.some((f) => f.id === newFieldId));
+  const pub = await api('GET', '/api/form-schema/published', { token: T3 });
+  check('agents can read the published form schema', pub.status === 200 && Array.isArray(pub.data.fields));
+  check('a form version is live', pub.data.version >= 1, 'got v' + pub.data.version);
+  check('A2 cannot reach the builder draft (403)', (await api('GET', '/api/form-schema/draft', { token: T2 })).status === 403);
+  check('A3 cannot reach the builder draft (403)', (await api('GET', '/api/form-schema/draft', { token: T3 })).status === 403);
+  check('the retired /api/form-fields engine is gone (404)', (await api('GET', '/api/form-fields', { token: T1 })).status === 404);
 }
 
 // ───────────────────────────────── online / presence status

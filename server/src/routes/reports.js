@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import { db } from '../lib/db.js';
 import { authenticate, requireRole, audit, ROLES } from '../lib/auth.js';
 import { buildFilter } from './voters.js';
+import { getPublishedSchema, STRUCTURAL_TYPES } from '../lib/formSchema.js';
 
 const router = express.Router();
 router.use(authenticate);
@@ -13,6 +14,36 @@ router.use(authenticate);
 router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
   try {
     const f = await buildFilter(req);
+
+    // Build the dynamic column set: fields in the live form first (in form
+    // order, with their bilingual labels), then any key that only exists in
+    // stored answers because the field was retired since it was collected.
+    const schema = await getPublishedSchema();
+    const liveCustom = schema.fields.filter((fd) => !fd.bind && !fd.transient && !STRUCTURAL_TYPES.has(fd.type));
+    const answeredKeys = await db
+      .prepare('SELECT DISTINCT field_key FROM vms_survey_answers')
+      .all();
+
+    const dynamicColumns = [];
+    const seenKeys = new Set();
+    for (const fd of liveCustom) {
+      seenKeys.add(fd.key);
+      dynamicColumns.push({ key: `dyn_${fd.key}`, field: fd.key, header: fd.labelTa ? `${fd.labelTa} / ${fd.label}` : fd.label });
+    }
+    for (const row of answeredKeys) {
+      if (seenKeys.has(row.field_key)) continue;
+      seenKeys.add(row.field_key);
+      dynamicColumns.push({ key: `dyn_${row.field_key}`, field: row.field_key, header: `${row.field_key} (retired)` });
+    }
+
+    // One pass for the answers keyed by elector, so the row loop stays a stream.
+    const answersByEpic = new Map();
+    if (dynamicColumns.length) {
+      for (const row of await db.prepare('SELECT epic_id, field_key, value FROM vms_survey_answers').all()) {
+        if (!answersByEpic.has(row.epic_id)) answersByEpic.set(row.epic_id, {});
+        answersByEpic.get(row.epic_id)[row.field_key] = row.value;
+      }
+    }
 
     const stmt = db.prepare(
       `SELECT v.epic_id, v.name_ta, v.relative_name_ta, v.relation_type_ta,
@@ -65,6 +96,10 @@ router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
       { header: 'கட்சி குறியீடு', key: 'partyCode', width: 14 },
       { header: 'கணக்கெடுப்பாளர்', key: 'agent', width: 20 },
       { header: 'கணக்கெடுப்பு நாள்', key: 'surveyedAt', width: 20 },
+      // Every custom field the Form Builder has ever collected an answer for
+      // gets its own column — including fields since retired, so a historical
+      // export is never missing data that was actually recorded.
+      ...dynamicColumns.map((c) => ({ header: c.header, key: c.key, width: 22 })),
     ];
 
     const head = ws.getRow(1);
@@ -76,7 +111,19 @@ router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
 
     let count = 0;
     for await (const r of stmt.iterate(...f.params)) {
+      const dyn = answersByEpic.get(r.epic_id);
+      const dynCells = {};
+      for (const c of dynamicColumns) {
+        const raw = dyn?.[c.field] ?? '';
+        // Multi-selects are stored as a JSON array; flatten for the spreadsheet.
+        if (raw.startsWith?.('[')) {
+          try { dynCells[c.key] = JSON.parse(raw).join(', '); continue; } catch { /* not json */ }
+        }
+        dynCells[c.key] = raw;
+      }
+
       ws.addRow({
+        ...dynCells,
         epic: r.epic_id,
         name: r.name_ta,
         corrected: r.corrected_name_ta ?? '',

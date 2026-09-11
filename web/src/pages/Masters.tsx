@@ -9,8 +9,9 @@ import {
 } from '../components/ui';
 import { ImageUploader, LocalBodyBadge, PartySymbol } from '../components/spec-ui';
 import { Icon } from '../components/icons';
+import { CustomMasters } from '../components/CustomMasters';
 
-type Tab = 'caste' | 'job' | 'party' | 'education' | 'local-body';
+type Tab = 'caste' | 'job' | 'party' | 'education' | 'local-body' | 'custom';
 
 export default function Masters() {
   const [tab, setTab] = useState<Tab>('caste');
@@ -30,6 +31,7 @@ export default function Masters() {
             { value: 'party' as Tab, label: '3. Party Master' },
             { value: 'education' as Tab, label: '4. Education Master' },
             { value: 'local-body' as Tab, label: '5. Local Body Master' },
+            { value: 'custom' as Tab, label: '6. Custom Lists' },
           ]}
         />
       </div>
@@ -38,6 +40,7 @@ export default function Masters() {
       {tab === 'party' && <PartyMaster />}
       {tab === 'education' && <EducationMaster />}
       {tab === 'local-body' && <LocalBodyMaster />}
+      {tab === 'custom' && <CustomMasters />}
     </>
   );
 }

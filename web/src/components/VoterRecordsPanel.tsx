@@ -9,6 +9,11 @@ import {
 } from './ui';
 import { LocalBodyBadge, PartyGrid, PartySymbol, SortHeader } from './spec-ui';
 import { Icon } from './icons';
+import { DynamicFieldGrid } from './DynamicField';
+import {
+  isMulti, isStructural, pruneHidden, validateAnswers,
+  type AnswerMap, type FormSchema,
+} from '../lib/formSchema';
 
 type QuickFilter = 'all' | 'mine' | 'pending';
 
@@ -30,7 +35,7 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
   const [data, setData] = useState<Directory | null>(null);
   const [tree, setTree] = useState<BoothTree | null>(null);
   const [drops, setDrops] = useState<Dropdowns | null>(null);
-  const [customFieldDefs, setCustomFieldDefs] = useState<FormFieldDef[]>([]);
+  const [schema, setSchema] = useState<FormSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [detail, setDetail] = useState<Voter | null>(null);
@@ -60,7 +65,7 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
   useEffect(() => {
     api.get<BoothTree>('/api/booths').then(setTree).catch(() => { /* filters degrade to text search */ });
     api.get<Dropdowns>('/api/masters/dropdowns').then(setDrops).catch(() => { /* edit modal degrades */ });
-    api.get<FormFieldDef[]>('/api/form-fields').then(setCustomFieldDefs).catch(() => { /* optional */ });
+    api.get<FormSchema>('/api/form-schema/published').then(setSchema).catch(() => { /* edit modal degrades */ });
   }, []);
 
   const filters = useMemo(
@@ -293,8 +298,7 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
           voter={detail}
           isAgent={isAgent}
           canEditDirectly={canEditDirectly}
-          drops={drops}
-          customFieldDefs={customFieldDefs}
+          schema={schema}
           onClose={() => setDetail(null)}
           onSaved={refreshAfterEdit}
         />
@@ -304,9 +308,9 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
 }
 
 /* ============================ citizen dossier ============================ */
-function CitizenDossier({ voter, isAgent, canEditDirectly, drops, customFieldDefs, onClose, onSaved }: {
+function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSaved }: {
   voter: Voter; isAgent: boolean; canEditDirectly: boolean;
-  drops: Dropdowns | null; customFieldDefs: FormFieldDef[];
+  schema: FormSchema | null;
   onClose: () => void; onSaved: (v: Voter) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -316,8 +320,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, drops, customFieldDef
     return (
       <EditSurveyModal
         voter={voter}
-        drops={drops}
-        customFieldDefs={customFieldDefs}
+        schema={schema}
         onCancel={() => setEditing(false)}
         onSaved={(v) => { setEditing(false); onSaved(v); }}
       />
@@ -429,57 +432,84 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, drops, customFieldDef
 }
 
 /* ========================= A1/A2 direct edit modal ======================== */
-function EditSurveyModal({ voter, drops, customFieldDefs, onCancel, onSaved }: {
-  voter: Voter; drops: Dropdowns | null; customFieldDefs: FormFieldDef[];
+/**
+ * Renders the *same* published schema the field agents get, so a supervisor
+ * correcting a record sees exactly the questions that were asked — including
+ * any custom fields and conditional logic — rather than a second, drifting
+ * copy of the form.
+ */
+function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
+  voter: Voter; schema: FormSchema | null;
   onCancel: () => void; onSaved: (v: Voter) => void;
 }) {
   const toast = useToast();
   const s = voter.survey;
-  const initialJob = s?.jobId ? drops?.jobs.find((j) => j.id === s.jobId) : undefined;
 
   const [correctedNameTa, setCorrectedNameTa] = useState(s?.correctedNameTa ?? voter.nameTa ?? '');
   const [correctedRelativeNameTa, setCorrectedRelativeNameTa] = useState(s?.correctedRelativeNameTa ?? voter.relativeNameTa ?? '');
-  const [phoneNumber, setPhoneNumber] = useState(s?.phoneNumber ?? '');
-  const [casteId, setCasteId] = useState(s?.casteId ? String(s.casteId) : '');
-  const [sector, setSector] = useState(initialJob?.category ?? s?.jobCategory ?? '');
-  const [jobId, setJobId] = useState(s?.jobId ? String(s.jobId) : '');
-  const [partyId, setPartyId] = useState<number | null>(s?.partyId ?? null);
-  const [educationId, setEducationId] = useState(s?.educationId ? String(s.educationId) : '');
-  const [remarks, setRemarks] = useState(s?.remarks ?? '');
-  const [customFields, setCustomFields] = useState<Record<number, string>>(() => {
-    const init: Record<number, string> = {};
-    for (const cf of s?.customFields ?? []) if (cf.value !== null) init[cf.fieldId] = cf.value;
-    return init;
-  });
+  const [answers, setAnswers] = useState<AnswerMap>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const subJobs = useMemo(() => drops?.sectors.find((x) => x.category === sector)?.jobs ?? [], [drops, sector]);
+  useEffect(() => {
+    if (!schema) return;
+    const bound: Record<string, string> = {
+      phone_number: s?.phoneNumber ?? '',
+      caste_id: s?.casteId ? String(s.casteId) : '',
+      job_id: s?.jobId ? String(s.jobId) : '',
+      party_id: s?.partyId ? String(s.partyId) : '',
+      education_id: s?.educationId ? String(s.educationId) : '',
+      other_job_text: s?.otherJobText ?? '',
+      remarks: s?.remarks ?? '',
+    };
+    const stored = new Map((s?.customFields ?? []).map((c) => [c.key, c.value ?? '']));
+    const seeded: AnswerMap = {};
+    for (const f of schema.fields) {
+      if (isStructural(f.type)) continue;
+      if (f.bind && bound[f.bind] !== undefined) { seeded[f.key] = bound[f.bind]; continue; }
+      const raw = stored.get(f.key) ?? '';
+      if (isMulti(f.type)) {
+        try {
+          const parsed = JSON.parse(raw || '[]');
+          seeded[f.key] = Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch { seeded[f.key] = raw ? [raw] : []; }
+      } else seeded[f.key] = raw;
+    }
+    const sectorField = schema.fields.find((f) => f.source?.kind === 'master' && f.source.master === 'job_sector');
+    if (sectorField && s?.jobCategory) seeded[sectorField.key] = s.jobCategory;
+    setAnswers(seeded);
+  }, [schema, voter.epicId]);
 
-  const onSectorChange = (value: string) => {
-    const first = drops?.sectors.find((x) => x.category === value)?.jobs[0];
-    setSector(value);
-    setJobId(first ? String(first.id) : '');
+  const setAnswer = (key: string, value: string | string[]) => {
+    setAnswers((prev) => {
+      const next = { ...prev, [key]: value };
+      return schema ? pruneHidden(schema.fields, next) : next;
+    });
+    setErrors((e) => (e[key] ? { ...e, [key]: '' } : e));
   };
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setError(''); setErrors({});
+    if (!schema) return;
+
+    const cleaned = pruneHidden(schema.fields, answers);
+    const found = validateAnswers(schema.fields, cleaned);
+    if (Object.keys(found).length) {
+      setErrors(found);
+      setError('Please correct the highlighted fields');
+      return;
+    }
+
+    setSaving(true);
     try {
       const res = await api.post<{ updated: boolean; voter: Voter }>('/api/voters/survey/submit', {
         epicId: voter.epicId,
         correctedNameTa: correctedNameTa.trim(),
         correctedRelativeNameTa: correctedRelativeNameTa.trim(),
-        phoneNumber: phoneNumber.trim(),
-        casteId: casteId ? Number(casteId) : null,
-        jobId: jobId ? Number(jobId) : null,
-        partyId,
-        educationId: educationId ? Number(educationId) : null,
-        remarks: remarks.trim(),
-        customFields,
+        answers: cleaned,
       });
-      setSaving(true);
       toast.ok(res.updated ? 'Survey updated' : 'Survey saved', `${voter.nameTa} · ${voter.epicId}`);
       onSaved(res.voter);
     } catch (err) {
@@ -501,68 +531,19 @@ function EditSurveyModal({ voter, drops, customFieldDefs, onCancel, onSaved }: {
       {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
       <form onSubmit={save} className="stack">
         <div className="grid cols-2">
-          <Field label="Corrected name (Tamil)"><Input className="ta" value={correctedNameTa} onChange={(e) => setCorrectedNameTa(e.target.value)} /></Field>
+          <Field label="Corrected name (Tamil)">
+            <Input className="ta" value={correctedNameTa} onChange={(e) => setCorrectedNameTa(e.target.value)} />
+          </Field>
           <Field label={`Corrected relative name (${voter.relationTypeTa ?? 'father / husband'})`}>
             <Input className="ta" value={correctedRelativeNameTa} onChange={(e) => setCorrectedRelativeNameTa(e.target.value)} />
           </Field>
         </div>
-        <Field label="Phone number" hint="Optional" error={errors.phoneNumber}>
-          <PhoneInput value={phoneNumber} onChange={setPhoneNumber} invalid={!!errors.phoneNumber} />
-        </Field>
-        <Field label="Caste / community" hint="Optional" error={errors.casteId}>
-          <Select value={casteId} onChange={(e) => setCasteId(e.target.value)} invalid={!!errors.casteId}>
-            <option value="">Select caste…</option>
-            {drops?.castes.map((c) => <option key={c.id} value={c.id}>{c.category} — {c.name}{c.name_ta ? ` / ${c.name_ta}` : ''}</option>)}
-          </Select>
-        </Field>
-        <div className="grid cols-2">
-          <Field label="Occupation sector" hint="Optional" error={errors.sector}>
-            <Select value={sector} onChange={(e) => onSectorChange(e.target.value)} invalid={!!errors.sector}>
-              <option value="">Select sector…</option>
-              {drops?.sectors.map((sec) => <option key={sec.category} value={sec.category}>{sec.category}</option>)}
-            </Select>
-          </Field>
-          <Field label="Specific sub-job" hint="Optional" error={errors.jobId}>
-            <Select value={jobId} onChange={(e) => setJobId(e.target.value)} disabled={!sector} invalid={!!errors.jobId}>
-              <option value="">Select sub-job…</option>
-              {subJobs.map((j) => <option key={j.id} value={j.id}>{j.name_ta ? `${j.name_ta} (${j.name})` : j.name}</option>)}
-            </Select>
-          </Field>
-        </div>
-        <Field label="Education" hint="Optional">
-          <Select value={educationId} onChange={(e) => setEducationId(e.target.value)}>
-            <option value="">Select education level…</option>
-            {drops?.educationLevels.map((ed) => <option key={ed.id} value={ed.id}>{ed.name_ta ? `${ed.name_ta} (${ed.name})` : ed.name}</option>)}
-          </Select>
-        </Field>
-        <Field label="Political leaning" hint="Optional" error={errors.partyId}>
-          {drops ? <PartyGrid parties={drops.parties} value={partyId} onChange={setPartyId} /> : <div className="t-sm t-muted">Loading…</div>}
-        </Field>
-        {customFieldDefs.length > 0 && (
-          <div className="stack tight">
-            <div className="section-tag">Additional details</div>
-            {customFieldDefs.map((def) => (
-              <Field key={def.id} label={def.labelTa ? `${def.label} (${def.labelTa})` : def.label} required={def.isRequired} error={errors[`custom_${def.id}`]}>
-                {def.fieldType === 'select' ? (
-                  <Select value={customFields[def.id] ?? ''} onChange={(e) => setCustomFields((c) => ({ ...c, [def.id]: e.target.value }))} invalid={!!errors[`custom_${def.id}`]}>
-                    <option value="">Select…</option>
-                    {(def.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
-                  </Select>
-                ) : (
-                  <Input
-                    type={def.fieldType === 'number' ? 'number' : def.fieldType === 'date' ? 'date' : 'text'}
-                    value={customFields[def.id] ?? ''}
-                    onChange={(e) => setCustomFields((c) => ({ ...c, [def.id]: e.target.value }))}
-                    invalid={!!errors[`custom_${def.id}`]}
-                  />
-                )}
-              </Field>
-            ))}
-          </div>
+
+        {!schema ? (
+          <span className="t-sm t-muted">Loading the survey form…</span>
+        ) : (
+          <DynamicFieldGrid fields={schema.fields} values={answers} errors={errors} onChange={setAnswer} />
         )}
-        <Field label="Remarks" hint="Optional">
-          <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
-        </Field>
       </form>
     </Modal>
   );

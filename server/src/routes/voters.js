@@ -3,6 +3,7 @@ import { db, nowIso, withTransaction } from '../lib/db.js';
 import { authenticate, requireRole, audit, ROLES } from '../lib/auth.js';
 import { buildPartFilter } from '../lib/scope.js';
 import { invalidateDashboardCache } from './dashboard.js';
+import { getPublishedSchema, validateSubmission } from '../lib/formSchema.js';
 
 const router = express.Router();
 router.use(authenticate);
@@ -42,31 +43,43 @@ const COUNT_JOINS = `
   JOIN polling_parts pp ON pp.part_no = v.part_no
   LEFT JOIN voter_surveys s ON s.epic_id = v.epic_id`;
 
-/** Custom field answers for one survey */
-async function customFieldsFor(epicId) {
+/**
+ * Stored answers for the dynamic (non system-bound) fields of one survey.
+ *
+ * Answers are keyed by the field's stable key and read back through whatever
+ * schema is live now, so a field that was later renamed, reordered or retired
+ * still resolves to the label it should display — and an answer whose field is
+ * gone from the form entirely is still returned (flagged orphaned) rather than
+ * silently disappearing from the record.
+ */
+async function customFieldsFor(epicId, schemaFields) {
   const rows = await db
-    .prepare(
-      `SELECT d.id AS field_id, d.field_key, d.label, d.label_ta, d.field_type, d.is_active, v.value
-         FROM survey_field_values v
-         JOIN survey_field_defs d ON d.id = v.field_id
-        WHERE v.epic_id = ?
-        ORDER BY d.sort_order, d.id`
-    )
+    .prepare('SELECT field_key, value FROM vms_survey_answers WHERE epic_id = ?')
     .all(epicId);
-  return rows.map((r) => ({
-    fieldId: r.field_id,
-    key: r.field_key,
-    label: r.label,
-    labelTa: r.label_ta,
-    fieldType: r.field_type,
-    isActive: !!r.is_active,
-    value: r.value,
-  }));
+  if (!rows.length) return [];
+
+  const byKey = new Map((schemaFields ?? []).map((f) => [f.key, f]));
+  return rows
+    .filter((r) => r.value !== null && r.value !== '')
+    .map((r) => {
+      const def = byKey.get(r.field_key);
+      return {
+        key: r.field_key,
+        label: def?.label ?? r.field_key,
+        labelTa: def?.labelTa ?? null,
+        fieldType: def?.type ?? 'text',
+        isActive: def ? def.active !== false : false,
+        orphaned: !def,
+        value: r.value,
+      };
+    });
 }
 
-async function shapeVoter(r, { includeCustomFields = false } = {}) {
+async function shapeVoter(r, { includeCustomFields = false, schemaFields = null } = {}) {
   if (!r) return null;
-  const customFields = includeCustomFields && r.survey_epic ? await customFieldsFor(r.epic_id) : undefined;
+  const customFields = includeCustomFields && r.survey_epic
+    ? await customFieldsFor(r.epic_id, schemaFields ?? (await getPublishedSchema()).fields)
+    : undefined;
   return {
     epicId: r.epic_id,
     voterSno: r.voter_sno,
@@ -297,6 +310,49 @@ router.get('/:epic', async (req, res, next) => {
 });
 
 /**
+ * The flat field names older clients post, mapped onto the schema keys the
+ * seeded system-bound fields use. Keeping this means a client that hasn't been
+ * refreshed (or the A1/A2 edit modal) still submits successfully against the
+ * schema-driven validator, instead of silently sending nothing.
+ */
+const LEGACY_ALIASES = {
+  phoneNumber: 'phone_number',
+  phone_number: 'phone_number',
+  casteId: 'caste_id',
+  caste_id: 'caste_id',
+  jobId: 'job_id',
+  job_id: 'job_id',
+  partyId: 'party_id',
+  party_id: 'party_id',
+  educationId: 'education_id',
+  education_id: 'education_id',
+  otherJobText: 'other_job_text',
+  other_job_text: 'other_job_text',
+  remarks: 'remarks',
+  sector: 'job_sector',
+  job_sector: 'job_sector',
+};
+
+/** Builds the answer map from either the new `answers` object or a legacy flat body. */
+function buildSubmission(body, fields) {
+  const known = new Set(fields.map((f) => f.key));
+  const out = {};
+
+  for (const [alias, key] of Object.entries(LEGACY_ALIASES)) {
+    if (body[alias] !== undefined && known.has(key) && out[key] === undefined) {
+      out[key] = body[alias];
+    }
+  }
+  // Anything already using schema keys at the top level (older custom fields).
+  for (const key of known) {
+    if (body[key] !== undefined) out[key] = body[key];
+  }
+  // The canonical shape wins wherever it is present.
+  if (body.answers && typeof body.answers === 'object') Object.assign(out, body.answers);
+  return out;
+}
+
+/**
  * POST /api/voters/survey/submit
  */
 router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (req, res, next) => {
@@ -305,20 +361,9 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
     const epic = String(b.epicId ?? b.epic_id ?? '').trim().toUpperCase();
     const correctedName = String(b.correctedNameTa ?? b.corrected_name_ta ?? '').trim() || null;
     const correctedRelative = String(b.correctedRelativeNameTa ?? b.corrected_relative_name_ta ?? '').trim() || null;
-    const phone = String(b.phoneNumber ?? b.phone_number ?? '').trim();
-    const casteId = b.casteId ?? b.caste_id ? Number(b.casteId ?? b.caste_id) : null;
-    const jobId = b.jobId ?? b.job_id ? Number(b.jobId ?? b.job_id) : null;
-    const partyId = b.partyId ?? b.party_id ? Number(b.partyId ?? b.party_id) : null;
-    const educationId = b.educationId ?? b.education_id ? Number(b.educationId ?? b.education_id) : null;
-    const otherJobText = String(b.otherJobText ?? b.other_job_text ?? '').trim() || null;
-    const remarks = String(b.remarks ?? '').trim() || null;
-    const customFields = b.customFields && typeof b.customFields === 'object' ? b.customFields : {};
 
-    const fields = {};
-    if (!epic) fields.epicId = 'EPIC number is required';
-    if (phone && !PHONE_RE.test(phone)) fields.phoneNumber = 'Enter a valid 10-digit number starting 6-9';
-    if (Object.keys(fields).length) {
-      return res.status(400).json({ error: 'Please correct the invalid fields', fields });
+    if (!epic) {
+      return res.status(400).json({ error: 'Please correct the invalid fields', fields: { epicId: 'EPIC number is required' } });
     }
 
     const scope = await buildPartFilter(req.user, 'v');
@@ -335,49 +380,39 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
       return res.status(409).json({ error: 'This elector is marked deleted in the roll and cannot be surveyed' });
     }
 
-    for (const [table, id, field, label] of [
-      ['caste_master', casteId, 'casteId', 'caste'],
-      ['job_master', jobId, 'jobId', 'occupation'],
-      ['party_master', partyId, 'partyId', 'party'],
-    ]) {
-      if (id && !await db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND is_active = 1`).get(id)) {
-        return res.status(422).json({ error: `Selected ${label} is no longer available`, fields: { [field]: 'Unavailable' } });
-      }
-    }
-    if (educationId && !await db.prepare('SELECT 1 FROM education_master WHERE id = ? AND is_active = 1').get(educationId)) {
-      return res.status(422).json({ error: 'Selected education level is no longer available', fields: { educationId: 'Unavailable' } });
-    }
+    // Everything in Sections C/D is now governed by the published schema, so
+    // the server validates against exactly the form the agent was shown —
+    // required flags, types, ranges, patterns, and that every chosen master
+    // option is still active. Legacy clients that still post the old flat
+    // field names keep working via `answers` falling back to the body itself.
+    const schema = await getPublishedSchema();
+    const submitted = buildSubmission(b, schema.fields);
+    const { systemValues, answers, errors, codes } = await validateSubmission(schema.fields, submitted);
 
-    const activeDefs = await db.prepare('SELECT id, label, field_type, is_required, options_json FROM survey_field_defs WHERE is_active = 1').all();
-    const customFieldErrors = {};
-    for (const def of activeDefs) {
-      const raw = customFields[def.id];
-      const value = raw === undefined || raw === null ? '' : String(raw).trim();
-      if (def.is_required && !value) {
-        customFieldErrors[`custom_${def.id}`] = `${def.label} is required`;
-        continue;
+    if (Object.keys(errors).length) {
+      // Errors are echoed under the schema key *and* the legacy camelCase name
+      // so a client built against either shape can highlight the right input.
+      const fields = { ...errors };
+      for (const [alias, key] of Object.entries(LEGACY_ALIASES)) {
+        if (errors[key] !== undefined && alias !== key) fields[alias] = errors[key];
       }
-      if (value && def.field_type === 'select') {
-        const options = JSON.parse(def.options_json || '[]');
-        if (!options.includes(value)) {
-          customFieldErrors[`custom_${def.id}`] = `Invalid option for ${def.label}`;
-        }
-      }
-      if (value && def.field_type === 'number' && Number.isNaN(Number(value))) {
-        customFieldErrors[`custom_${def.id}`] = `${def.label} must be a number`;
-      }
-    }
-    if (Object.keys(customFieldErrors).length) {
-      return res.status(400).json({ error: 'Please correct the custom field values', fields: customFieldErrors });
+      // A retired master option is "well-formed but no longer selectable" —
+      // that kept its own 422 before this became schema-driven, so it still does.
+      const allUnavailable = Object.keys(errors).every((k) => codes[k] === 'unavailable');
+      return res.status(allUnavailable ? 422 : 400).json({
+        error: allUnavailable
+          ? `Selected ${Object.keys(errors).length > 1 ? 'options are' : 'option is'} no longer available`
+          : 'Please correct the highlighted fields',
+        fields,
+      });
     }
 
     const existing = await db.prepare('SELECT epic_id, surveyed_by FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
     const surveyedBy = existing ? existing.surveyed_by : req.user.id;
 
-    // The main survey upsert and its custom-field values must land together —
-    // withTransaction holds one connection for the whole block, so a failure
-    // partway through (e.g. a bad custom-field value) rolls back the survey
-    // upsert too instead of leaving it committed with only some fields saved.
+    // The survey row and its dynamic answers must land together — withTransaction
+    // holds one connection for the whole block, so a failure partway through
+    // rolls the whole submission back rather than half-saving it.
     await withTransaction(async (trx) => {
       await trx.prepare(
         `INSERT INTO voter_surveys
@@ -398,27 +433,31 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
            last_updated_by = VALUES(last_updated_by),
            updated_at = NOW()`
       ).run(
-        voter.epic_id, correctedName, correctedRelative, phone || '',
-        casteId, jobId, partyId, educationId, otherJobText, remarks,
+        voter.epic_id, correctedName, correctedRelative,
+        systemValues.phone_number ?? '',
+        systemValues.caste_id ?? null, systemValues.job_id ?? null,
+        systemValues.party_id ?? null, systemValues.education_id ?? null,
+        systemValues.other_job_text ?? null, systemValues.remarks ?? null,
         surveyedBy, req.user.id
       );
 
-      const upsertField = trx.prepare(
-        `INSERT INTO survey_field_values (epic_id, field_id, value) VALUES (?,?,?)
+      const upsertAnswer = trx.prepare(
+        `INSERT INTO vms_survey_answers (epic_id, field_key, value) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE value = VALUES(value)`
       );
-      for (const def of activeDefs) {
-        const raw = customFields[def.id];
-        const value = raw === undefined || raw === null ? '' : String(raw).trim();
-        if (value) await upsertField.run(voter.epic_id, def.id, value);
+      for (const [key, value] of Object.entries(answers)) {
+        // A null here means "this field was left blank or its parent condition
+        // hid it" — store the cleared state rather than leaving a stale answer.
+        await upsertAnswer.run(voter.epic_id, key, value);
       }
     });
 
-    audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id, null);
+    audit(req.user.id, existing ? 'SURVEY_UPDATED' : 'SURVEY_CREATED', 'voter_survey', voter.epic_id,
+      `form v${schema.version}`);
     invalidateDashboardCache();
 
     const fresh = await db.prepare(`SELECT ${VOTER_COLUMNS} ${VOTER_JOINS} WHERE v.epic_id = ?`).get(voter.epic_id);
-    const shapedVoter = await shapeVoter(fresh, { includeCustomFields: true });
+    const shapedVoter = await shapeVoter(fresh, { includeCustomFields: true, schemaFields: schema.fields });
     res.json({
       ok: true,
       updated: !!existing,

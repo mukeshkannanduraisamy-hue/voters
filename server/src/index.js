@@ -14,7 +14,8 @@ import dashboardRoutes from './routes/dashboard.js';
 import boothRoutes from './routes/booths.js';
 import reportRoutes from './routes/reports.js';
 import syncStatusRoutes from './routes/sync.js';
-import formFieldRoutes from './routes/formFields.js';
+import formSchemaRoutes from './routes/formSchema.js';
+import masterCategoryRoutes from './routes/masterCategories.js';
 import backupRoutes from './routes/backups.js';
 import { startBackupScheduler } from './lib/backupScheduler.js';
 
@@ -104,7 +105,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/booths', boothRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/sync', syncStatusRoutes);
-app.use('/api/form-fields', formFieldRoutes);
+app.use('/api/form-schema', formSchemaRoutes);
+app.use('/api/master-categories', masterCategoryRoutes);
 app.use(backupRoutes);
 
 app.use('/api', (req, res) =>

@@ -61,7 +61,7 @@ function navFor(role: Role): NavEntry[] {
     { to: '/admin/users/create',   label: 'Create User',    icon: 'user-plus', roles: ['A1_SUPER_ADMIN', 'A2_SUPERVISOR'], section: 'Administration' },
     { to: '/admin/users',          label: 'User List',      icon: 'users',     roles: ['A1_SUPER_ADMIN', 'A2_SUPERVISOR'], section: 'Administration' },
     { to: '/admin/masters',        label: 'Master Data',    icon: 'database',  roles: ['A1_SUPER_ADMIN'], section: 'Administration' },
-    { to: '/admin/form-fields',    label: 'Form Builder',   icon: 'layers',    roles: ['A1_SUPER_ADMIN'], section: 'Administration' },
+    { to: '/admin/form-builder',   label: 'Form Builder',   icon: 'layers',    roles: ['A1_SUPER_ADMIN'], section: 'Administration' },
     { to: '/admin/audit',          label: 'Activity Log',   icon: 'activity',  roles: ['A1_SUPER_ADMIN'], section: 'Administration' },
     { to: '/admin/backups',        label: 'DB Backups',     icon: 'database',  roles: ['A1_SUPER_ADMIN'], section: 'Administration' },
 
