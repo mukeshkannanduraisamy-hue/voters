@@ -4,6 +4,9 @@ data/*.db-wal
 data/*.db-shm
 data/*.db.zip
 .env
+**/.env
+!.env.example
+!**/.env.example
 # web/dist/ (tracked so production assets are pre-built for deployment)
 *.log
 ~$*
@@ -11,3 +14,6 @@ tsconfig.tsbuildinfo
 *.xlsx
 backups/*.sql.gz
 backups/
+.claude/
+**/.claude/
+
