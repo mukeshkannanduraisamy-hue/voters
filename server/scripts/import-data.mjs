@@ -13,8 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
-import { db, migrate, analyze, DATA_DIR } from '../src/lib/db.js';
-import { migrateOutbox } from '../src/lib/outbox.js';
+import { db, migrate, analyze, DATA_DIR, pool } from '../src/lib/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -74,12 +73,12 @@ function localBodyType(sectionDetails) {
   return 'VILLAGE_PANCHAYAT';
 }
 
-function dropRollTables() {
-  db.exec(`
-    PRAGMA foreign_keys = OFF;
+async function dropRollTables() {
+  await db.exec(`
+    SET FOREIGN_KEY_CHECKS = 0;
     DROP TABLE IF EXISTS voters_master;
     DROP TABLE IF EXISTS polling_parts;
-    PRAGMA foreign_keys = ON;
+    SET FOREIGN_KEY_CHECKS = 1;
   `);
 }
 
@@ -108,22 +107,15 @@ async function main() {
 
   if (FRESH) {
     console.log('  --fresh: rebuilding roll tables ...');
-    dropRollTables();
+    await dropRollTables();
   }
-  migrate();
-  // Registers the sync-outbox triggers (and the vms_uuid() function they call)
-  // on THIS process's connection. Without this, a fresh `voters_master`/
-  // `polling_parts` import would proceed fine (those two tables aren't synced),
-  // but if the outbox trigger schema already exists from a previous server run
-  // and this script later touches a synced table, it would fail with
-  // "no such function: vms_uuid" — registered functions are per-connection,
-  // not persisted in the database file the way triggers are.
-  migrateOutbox();
+  await migrate();
 
-  const already = db.prepare('SELECT COUNT(*) AS c FROM voters_master').get().c;
+  const already = (await db.prepare('SELECT COUNT(*) AS c FROM voters_master').get())?.c ?? 0;
   if (already > 0 && !FRESH) {
     console.log(`  voters_master already holds ${already.toLocaleString()} rows — nothing to do.`);
     console.log('  Re-run with --fresh to rebuild.\n');
+    await pool.end();
     return;
   }
 
@@ -137,7 +129,7 @@ async function main() {
   const canonLocalBody = buildCanonicaliser(partRows.map((r) => clean(r[12])));
   const canonPc = buildCanonicaliser(partRows.map((r) => clean(r[6])));
 
-  db.exec('BEGIN');
+  await db.exec('START TRANSACTION');
   try {
     // ---------------- polling parts ----------------
     const insPart = db.prepare(
@@ -159,7 +151,7 @@ async function main() {
       // Local body falls back to the main village so every booth is groupable.
       const localBody = canonLocalBody(clean(r[12])) ?? clean(r[10]) ?? `பாகம் ${partNo}`;
 
-      insPart.run(
+      await insPart.run(
         partNo, acNo, clean(r[2]), clean(r[5]), canonPc(clean(r[6])),
         localBody, localBodyType(section),
         clean(r[10]), clean(r[11]), canonTaluk(clean(r[13])), canonDistrict(clean(r[14])),
@@ -185,7 +177,7 @@ async function main() {
       const partNo = num(v[11]);
       if (partNo === null || !knownParts.has(partNo)) { noPart++; continue; }
 
-      insVoter.run(
+      await insVoter.run(
         epic, num(v[1]), partNo,
         clean(v[3]) ?? '—', clean(v[4]), clean(v[5]),
         clean(v[6]), num(v[7]), clean(v[8]),
@@ -196,14 +188,14 @@ async function main() {
       if (inserted % 50000 === 0) console.log(`    ... ${inserted.toLocaleString()} voters`);
     }
 
-    db.exec('COMMIT');
+    await db.exec('COMMIT');
 
     // A --fresh drop runs with foreign keys off, so cascades never fire. Clear
     // any survey or scope row left pointing at something that no longer exists.
-    const orphanSurveys = db.prepare(
+    const orphanSurveys = await db.prepare(
       'DELETE FROM voter_surveys WHERE epic_id NOT IN (SELECT epic_id FROM voters_master)'
     ).run();
-    const orphanScopes = db.prepare(
+    const orphanScopes = await db.prepare(
       'DELETE FROM user_jurisdictions WHERE part_no NOT IN (SELECT part_no FROM polling_parts)'
     ).run();
     if (orphanSurveys.changes) console.log(`  removed ${orphanSurveys.changes} orphaned survey(s)`);
@@ -212,16 +204,17 @@ async function main() {
     console.log('  building planner statistics ...');
     analyze();
 
-    const one = (q) => db.prepare(q).get().c;
-    const towns = one("SELECT COUNT(*) c FROM polling_parts WHERE local_body_type='TOWN_PANCHAYAT'");
-    const villages = one("SELECT COUNT(*) c FROM polling_parts WHERE local_body_type='VILLAGE_PANCHAYAT'");
+    const one = async (q) => (await db.prepare(q).get())?.c ?? 0;
+    const towns = await one("SELECT COUNT(*) c FROM polling_parts WHERE local_body_type='TOWN_PANCHAYAT'");
+    const villages = await one("SELECT COUNT(*) c FROM polling_parts WHERE local_body_type='VILLAGE_PANCHAYAT'");
+    const firstPart = await db.prepare('SELECT ac_no, ac_name_ta FROM polling_parts LIMIT 1').get();
 
     console.log('\n  ─────────── import complete ───────────');
-    console.log(`  constituency   : AC ${db.prepare('SELECT ac_no, ac_name_ta FROM polling_parts LIMIT 1').get()?.ac_no} ${db.prepare('SELECT ac_name_ta FROM polling_parts LIMIT 1').get()?.ac_name_ta ?? ''}`);
-    console.log(`  polling parts  : ${one('SELECT COUNT(*) c FROM polling_parts')}  (${towns} town / ${villages} village)`);
-    console.log(`  local bodies   : ${one('SELECT COUNT(DISTINCT local_body_name_ta) c FROM polling_parts')}`);
-    console.log(`  voters_master  : ${one('SELECT COUNT(*) c FROM voters_master').toLocaleString()}`);
-    console.log(`  live electors  : ${one('SELECT COUNT(*) c FROM voters_master WHERE is_deleted=0').toLocaleString()}`);
+    console.log(`  constituency   : AC ${firstPart?.ac_no ?? '?'} ${firstPart?.ac_name_ta ?? ''}`);
+    console.log(`  polling parts  : ${await one('SELECT COUNT(*) c FROM polling_parts')}  (${towns} town / ${villages} village)`);
+    console.log(`  local bodies   : ${await one('SELECT COUNT(DISTINCT local_body_name_ta) c FROM polling_parts')}`);
+    console.log(`  voters_master  : ${(await one('SELECT COUNT(*) c FROM voters_master')).toLocaleString()}`);
+    console.log(`  live electors  : ${(await one('SELECT COUNT(*) c FROM voters_master WHERE is_deleted=0')).toLocaleString()}`);
     if (skipped) console.log(`  skipped parts  : ${skipped}`);
     if (noPart) console.log(`  voters w/o part: ${noPart}`);
     if (noEpic) console.log(`  voters w/o epic: ${noEpic}`);
@@ -230,8 +223,10 @@ async function main() {
     console.log(`  roll declares  : ${declared.toLocaleString()} across ${countRows.length} parts`);
     console.log('  ───────────────────────────────────────\n');
   } catch (err) {
-    db.exec('ROLLBACK');
+    try { await db.exec('ROLLBACK'); } catch {}
     throw err;
+  } finally {
+    await pool.end();
   }
 }
 

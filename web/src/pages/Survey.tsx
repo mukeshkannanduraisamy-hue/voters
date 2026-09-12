@@ -353,8 +353,24 @@ export default function Survey() {
           {voter.surveyed && (
             <div className="mb-4">
               <Alert tone="ok">
-                <strong>Already surveyed</strong> on {fmtDate(voter.survey?.surveyedAt, true)}
-                {voter.survey?.agentName && <> by {voter.survey.agentName}</>}. Saving again will update the record.
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div>
+                    <strong>Already surveyed</strong> on {fmtDate(voter.survey?.surveyedAt, true)}
+                    {voter.survey?.agentName && <> by {voter.survey.agentName}</>}. Saving again will update the record.
+                  </div>
+                  {voter.survey?.phoneNumber && (
+                    <a
+                      href={`tel:+91${voter.survey.phoneNumber.replace(/\D/g, '').slice(-10)}`}
+                      className="input-call-btn"
+                      style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, margin: 0 }}
+                      title={`Call +91 ${voter.survey.phoneNumber}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Icon name="phone" size={14} />
+                      <span>Call +91 {voter.survey.phoneNumber}</span>
+                    </a>
+                  )}
+                </div>
               </Alert>
             </div>
           )}
@@ -454,6 +470,7 @@ export default function Survey() {
                     values={answers}
                     errors={errors}
                     onChange={setAnswer}
+                    allowCall={true}
                   />
                 )}
               </div>

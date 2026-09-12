@@ -41,12 +41,13 @@ export function useFieldOptions(field: FormField): FieldOption[] {
 }
 
 /* ------------------------------------------------------------------- field */
-export function DynamicField({ field, values, errors, onChange, tamilFirst = true }: {
+export function DynamicField({ field, values, errors, onChange, tamilFirst = true, allowCall = false }: {
   field: FormField;
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
   tamilFirst?: boolean;
+  allowCall?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
 
@@ -106,7 +107,7 @@ export function DynamicField({ field, values, errors, onChange, tamilFirst = tru
       case 'phone':
         return (
           <PhoneInput value={str} placeholder={placeholder ?? '9840112233'} invalid={!!err}
-            onChange={(v) => onChange(field.key, v)} />
+            onChange={(v) => onChange(field.key, v)} allowCall={allowCall} />
         );
 
       case 'date':
@@ -202,11 +203,12 @@ export function DynamicField({ field, values, errors, onChange, tamilFirst = tru
  * Lays the fields out honouring each one's configured width, and starts a new
  * row at every section header so cards stay visually grouped.
  */
-export function DynamicFieldGrid({ fields, values, errors, onChange }: {
+export function DynamicFieldGrid({ fields, values, errors, onChange, allowCall = false }: {
   fields: FormField[];
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
+  allowCall?: boolean;
 }) {
   return (
     <div className="dyn-grid">
@@ -215,7 +217,7 @@ export function DynamicFieldGrid({ fields, values, errors, onChange }: {
         const span = f.type === 'section' || f.type === 'divider' || f.type === 'notice' ? 'full' : f.width;
         return (
           <div key={f.key} className={`dyn-cell dyn-${span}`}>
-            <DynamicField field={f} values={values} errors={errors} onChange={onChange} />
+            <DynamicField field={f} values={values} errors={errors} onChange={onChange} allowCall={allowCall} />
           </div>
         );
       })}

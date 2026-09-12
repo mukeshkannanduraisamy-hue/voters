@@ -94,6 +94,8 @@ export default function App() {
             {/* administration */}
             <Route path="/admin/users"        element={<Guard roles={ADMINS}><Users /></Guard>} />
             <Route path="/admin/users/create" element={<Guard roles={ADMINS}><CreateUser /></Guard>} />
+            <Route path="/supervisor/users"        element={<Guard roles={ADMINS}><Users /></Guard>} />
+            <Route path="/supervisor/users/create" element={<Guard roles={ADMINS}><CreateUser /></Guard>} />
             <Route path="/admin/masters"      element={<Guard roles={['A1_SUPER_ADMIN']}><Masters /></Guard>} />
             <Route path="/admin/form-builder" element={<Guard roles={['A1_SUPER_ADMIN']}><FormBuilder /></Guard>} />
             <Route path="/admin/audit"        element={<Guard roles={['A1_SUPER_ADMIN']}><Audit /></Guard>} />

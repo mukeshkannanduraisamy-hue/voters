@@ -3,9 +3,9 @@ import mysql from 'mysql2/promise';
 const DB_CONFIG = {
   host: process.env.DB_HOST || 'srv1497.hstgr.io',
   port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'u403881955_ecl_admin',
-  password: process.env.DB_PASSWORD || 'ECLAdmin@2026',
-  database: process.env.DB_NAME || 'u403881955_ECL',
+  user: process.env.DB_USER || 'u403881955_vms_admin',
+  password: process.env.DB_PASSWORD || 'VmsAdmin#2026Secure',
+  database: process.env.DB_NAME || 'u403881955_vms',
   waitForConnections: true,
   connectionLimit: 5,
   maxIdle: 3,
@@ -14,6 +14,7 @@ const DB_CONFIG = {
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
   dateStrings: true,
+  ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
 };
 
 const pool = mysql.createPool(DB_CONFIG);
@@ -22,6 +23,7 @@ const VMS_TABLES = [
   'voters_master', 'polling_parts', 'users', 'user_jurisdictions',
   'caste_master', 'job_master', 'party_master', 'education_master',
   'survey_field_defs', 'survey_field_values', 'voter_surveys',
+  'form_schemas', 'master_categories', 'master_items', 'survey_answers',
   'app_meta', 'audit_log', 'sync_outbox'
 ];
 const TABLE_REGEX = new RegExp(`\\b(${VMS_TABLES.join('|')})\\b`, 'g');

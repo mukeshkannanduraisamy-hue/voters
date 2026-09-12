@@ -29,7 +29,7 @@ router.get('/api/admin/backups/download/:filename', authenticate, requireRole(RO
   try {
     const { filename } = req.params;
     // Security check: ensure filename is safe and in backups dir
-    if (!filename || !filename.startsWith('vms_backup_') || !filename.endsWith('.sql.gz') || filename.includes('..') || filename.includes('/')) {
+    if (!filename || !filename.startsWith('vms_backup_') || !filename.endsWith('.sql.gz') || filename.includes('..') || filename.includes('/') || filename.includes('\\') || path.basename(filename) !== filename) {
       return res.status(400).json({ error: 'Invalid backup filename' });
     }
 
@@ -43,6 +43,14 @@ router.get('/api/admin/backups/download/:filename', authenticate, requireRole(RO
     res.setHeader('Content-Type', 'application/gzip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     const stream = fs.createReadStream(filepath);
+    stream.on('error', (streamErr) => {
+      console.error('[backup] Download stream error:', streamErr);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream backup file' });
+      } else {
+        res.destroy();
+      }
+    });
     stream.pipe(res);
   } catch (err) {
     res.status(500).json({ error: 'Failed to download backup', detail: err.message });
@@ -67,7 +75,7 @@ router.post('/api/admin/backups/trigger', authenticate, requireRole(ROLES.A1), a
 router.delete('/api/admin/backups/:filename', authenticate, requireRole(ROLES.A1), (req, res) => {
   try {
     const { filename } = req.params;
-    if (!filename || !filename.startsWith('vms_backup_') || !filename.endsWith('.sql.gz') || filename.includes('..') || filename.includes('/')) {
+    if (!filename || !filename.startsWith('vms_backup_') || !filename.endsWith('.sql.gz') || filename.includes('..') || filename.includes('/') || filename.includes('\\') || path.basename(filename) !== filename) {
       return res.status(400).json({ error: 'Invalid backup filename' });
     }
 

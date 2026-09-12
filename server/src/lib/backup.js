@@ -22,6 +22,9 @@ function sqlEscapeString(val) {
   if (val instanceof Date) {
     return `'${val.toISOString().slice(0, 19).replace('T', ' ')}'`;
   }
+  if (typeof val === 'object') {
+    val = JSON.stringify(val);
+  }
   const str = String(val)
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
@@ -296,6 +299,8 @@ export async function createDatabaseBackup(options = {}) {
     };
   } catch (err) {
     console.error(`[backup] Backup failed:`, err);
+    try { gzipStream.destroy(); } catch {}
+    try { fileStream.destroy(); } catch {}
     if (fs.existsSync(filepath)) {
       try { fs.unlinkSync(filepath); } catch {}
     }

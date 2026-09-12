@@ -309,8 +309,79 @@
 }
 .input-prefix .input {
   border: none; box-shadow: none; background: transparent; border-radius: 0;
+  flex: 1; min-width: 0;
 }
 .input-prefix .input:focus { box-shadow: none; }
+
+/* Phone call dialer feature (survey form only) */
+.phone-input-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.input-call-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 6px;
+  padding: 5px 11px;
+  background: var(--ok-50, #ecfdf5);
+  color: var(--ok-700, #047857);
+  border: 1px solid var(--ok-500, #10b981);
+  border-radius: var(--r-sm, 6px);
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--dur, 0.15s) var(--ease, ease);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.input-call-btn:hover,
+.input-call-btn:active {
+  background: var(--ok-600, #059669);
+  color: #ffffff;
+  border-color: var(--ok-600, #059669);
+}
+
+.phone-dialer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.phone-dialer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--brand-50, #eff6ff);
+  color: var(--brand-700, #1d4ed8);
+  border: 1px solid var(--brand-200, #bfdbfe);
+  border-radius: 9999px;
+  font-size: var(--fs-xs, 0.75rem);
+  text-decoration: none;
+  transition: all var(--dur, 0.15s) var(--ease, ease);
+  cursor: pointer;
+}
+
+.phone-dialer-pill:hover,
+.phone-dialer-pill:active {
+  background: var(--brand-600, #2563eb);
+  color: #ffffff;
+  border-color: var(--brand-600, #2563eb);
+}
+
+@media (max-width: 480px) {
+  .input-call-btn {
+    padding: 5px 8px;
+  }
+}
 
 /* segmented radio control */
 .segmented { display: inline-flex; background: var(--surface-3); padding: 3px; border-radius: var(--r-md); gap: 2px; }

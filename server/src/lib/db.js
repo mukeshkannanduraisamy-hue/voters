@@ -1,5 +1,10 @@
 import mysql from 'mysql2/promise';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export const DATA_DIR = path.resolve(__dirname, '../../../data');
 
 export const DB_HOST = process.env.DB_HOST || 'srv1497.hstgr.io';
 export const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10);
@@ -21,6 +26,7 @@ export const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
   dateStrings: true,
+  multipleStatements: true,
   ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
 });
 
@@ -28,6 +34,7 @@ const VMS_TABLES = [
   'voters_master', 'polling_parts', 'users', 'user_jurisdictions',
   'caste_master', 'job_master', 'party_master', 'education_master',
   'survey_field_defs', 'survey_field_values', 'voter_surveys',
+  'form_schemas', 'master_categories', 'master_items', 'survey_answers',
   'app_meta', 'audit_log', 'sync_outbox'
 ];
 const TABLE_REGEX = new RegExp(`\\b(${VMS_TABLES.join('|')})\\b`, 'g');

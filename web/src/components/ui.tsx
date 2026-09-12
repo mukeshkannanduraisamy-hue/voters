@@ -203,24 +203,56 @@ export function Textarea({ invalid, className = '', ...rest }: { invalid?: boole
  * The +91-prefixed mobile input. Wrapping it here (instead of hand-rolling the
  * markup at five call sites) means it always picks up its Field's label id.
  */
-export function PhoneInput({ invalid, value, onChange, placeholder = '9876543210', ...rest }: {
-  invalid?: boolean; value: string; onChange: (digits: string) => void; placeholder?: string;
+export function PhoneInput({ invalid, value, onChange, placeholder = '9876543210', allowCall = false, ...rest }: {
+  invalid?: boolean; value: string; onChange: (digits: string) => void; placeholder?: string; allowCall?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const id = useFieldId(rest.id);
+  const cleanDigits = (value || '').replace(/\D/g, '');
+  const hasCallNumber = cleanDigits.length >= 5;
+  const telNumber = cleanDigits.length === 10 ? `+91${cleanDigits}` : cleanDigits;
+
   return (
-    <div className={`input-prefix ${invalid ? 'invalid' : ''}`}>
-      <span>+91</span>
-      <input
-        {...rest}
-        id={id}
-        className="input"
-        type="tel"
-        inputMode="numeric"
-        maxLength={10}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
-      />
+    <div className="phone-input-container">
+      <div className={`input-prefix ${invalid ? 'invalid' : ''}`}>
+        <span>+91</span>
+        <input
+          {...rest}
+          id={id}
+          className="input"
+          type="tel"
+          inputMode="numeric"
+          maxLength={10}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
+        />
+        {allowCall && hasCallNumber && (
+          <a
+            href={`tel:${telNumber}`}
+            className="input-call-btn"
+            title={`Call ${telNumber}`}
+            aria-label={`Call ${telNumber}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Icon name="phone" size={14} />
+            <span className="call-btn-text">Call</span>
+          </a>
+        )}
+      </div>
+      {allowCall && hasCallNumber && (
+        <div className="phone-dialer-row">
+          <span className="t-xs t-muted">Tap to call:</span>
+          <a
+            href={`tel:${telNumber}`}
+            className="phone-dialer-pill"
+            title={`Open dialer for ${telNumber}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Icon name="phone" size={12} />
+            <span className="mono font-semibold">{telNumber}</span>
+          </a>
+        </div>
+      )}
     </div>
   );
 }
