@@ -471,6 +471,8 @@ export default function Survey() {
                     errors={errors}
                     onChange={setAnswer}
                     allowCall={true}
+                    onPickContact={phoneFieldKey ? () => void handlePickContact() : undefined}
+                    pickingContact={pickingContact}
                   />
                 )}
               </div>

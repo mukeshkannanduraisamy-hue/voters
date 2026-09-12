@@ -203,8 +203,13 @@ export function Textarea({ invalid, className = '', ...rest }: { invalid?: boole
  * The +91-prefixed mobile input. Wrapping it here (instead of hand-rolling the
  * markup at five call sites) means it always picks up its Field's label id.
  */
-export function PhoneInput({ invalid, value, onChange, placeholder = '9876543210', allowCall = false, ...rest }: {
+export function PhoneInput({
+  invalid, value, onChange, placeholder = '9876543210', allowCall = false,
+  onPickContact, pickingContact = false, ...rest
+}: {
   invalid?: boolean; value: string; onChange: (digits: string) => void; placeholder?: string; allowCall?: boolean;
+  /** When supplied, renders a "Contacts" button that hands off to the caller's own import flow (device Contact Picker / clipboard / intent fallback). */
+  onPickContact?: () => void; pickingContact?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const id = useFieldId(rest.id);
   const cleanDigits = (value || '').replace(/\D/g, '');
@@ -226,6 +231,19 @@ export function PhoneInput({ invalid, value, onChange, placeholder = '9876543210
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
         />
+        {onPickContact && (
+          <button
+            type="button"
+            className="input-contact-btn"
+            title="Import from device contacts / தொடர்புகளிலிருந்து இறக்குமதி செய்க"
+            aria-label="Import from contacts"
+            disabled={pickingContact}
+            onClick={(e) => { e.stopPropagation(); onPickContact(); }}
+          >
+            {pickingContact ? <span className="spinner" /> : <Icon name="users" size={14} />}
+            <span className="call-btn-text">Contacts</span>
+          </button>
+        )}
         {allowCall && hasCallNumber && (
           <a
             href={`tel:${telNumber}`}

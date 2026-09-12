@@ -347,6 +347,42 @@
   border-color: var(--ok-600, #059669);
 }
 
+.input-contact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 6px;
+  padding: 5px 11px;
+  background: var(--brand-50, #eff6ff);
+  color: var(--brand-700, #1d4ed8);
+  border: 1px solid var(--brand-500, #3b82f6);
+  border-radius: var(--r-sm, 6px);
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--dur, 0.15s) var(--ease, ease);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.input-contact-btn:hover:not(:disabled),
+.input-contact-btn:active:not(:disabled) {
+  background: var(--brand-600, #2563eb);
+  color: #ffffff;
+  border-color: var(--brand-600, #2563eb);
+}
+
+.input-contact-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.input-contact-btn .spinner {
+  width: 14px;
+  height: 14px;
+}
+
 .phone-dialer-row {
   display: flex;
   align-items: center;
@@ -378,7 +414,8 @@
 }
 
 @media (max-width: 480px) {
-  .input-call-btn {
+  .input-call-btn,
+  .input-contact-btn {
     padding: 5px 8px;
   }
 }
