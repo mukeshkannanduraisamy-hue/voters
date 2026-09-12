@@ -241,7 +241,6 @@ export function PhoneInput({
             onClick={(e) => { e.stopPropagation(); onPickContact(); }}
           >
             {pickingContact ? <span className="spinner" /> : <Icon name="users" size={14} />}
-            <span className="call-btn-text">Contacts</span>
           </button>
         )}
         {allowCall && hasCallNumber && (
