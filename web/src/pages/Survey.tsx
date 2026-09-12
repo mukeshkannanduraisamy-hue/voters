@@ -8,7 +8,7 @@ import {
   Progress, fmt, fmtDate, useToast,
 } from '../components/ui';
 import { VoterRecordsPanel } from '../components/VoterRecordsPanel';
-import { DynamicFieldGrid } from '../components/DynamicField';
+import { DynamicFieldGrid, isOtherJob } from '../components/DynamicField';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -166,7 +166,7 @@ export default function Survey() {
       const next = { ...prev, [key]: value };
       // Changing a parent answer can hide a child; clear it straight away so
       // the agent never submits a value for a question they can no longer see.
-      return schema ? pruneHidden(schema.fields, next) : next;
+      return schema ? pruneHidden(schema.fields, next, isOtherJob) : next;
     });
     setErrors((e) => (e[key] ? { ...e, [key]: '' } : e));
   };
@@ -180,8 +180,8 @@ export default function Survey() {
     setSaveError('');
     if (!voter || !schema) return;
 
-    const cleaned = pruneHidden(schema.fields, answers);
-    const found = validateAnswers(schema.fields, cleaned);
+    const cleaned = pruneHidden(schema.fields, answers, isOtherJob);
+    const found = validateAnswers(schema.fields, cleaned, isOtherJob);
     if (Object.keys(found).length) {
       setErrors(found);
       setSaveError('Please correct the highlighted fields before saving.');

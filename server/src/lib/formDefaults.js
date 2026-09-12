@@ -55,7 +55,7 @@ export const DEFAULT_FIELDS = [
   },
   {
     key: 'education_id', type: 'select', bind: 'education_id', width: 'half', active: true, required: false,
-    label: 'Education', labelTa: 'கல்வித் தகுதி',
+    label: 'Education', labelTa: null,
     source: { kind: 'master', master: 'education' },
   },
   {

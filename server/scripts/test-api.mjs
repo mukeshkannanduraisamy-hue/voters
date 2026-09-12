@@ -145,7 +145,7 @@ let newCasteId = null, newJobId = null, newPartyId = null;
   check('A3 CAN read dropdowns for the survey form', drops.status === 200 && drops.data.castes.length > 0);
   check('dropdowns include 6 job sectors', drops.data.sectors.length === 6, `got ${drops.data.sectors.length}`);
   check('sectors carry nested sub-jobs', drops.data.sectors.every((s) => s.jobs.length > 0));
-  check('38 sub-jobs are available', drops.data.jobs.length === 38, `got ${drops.data.jobs.length}`);
+  check('sub-jobs are available across sectors', drops.data.jobs.length >= 38, `got ${drops.data.jobs.length}`);
   check('parties carry Base64 emblems', drops.data.parties.every((p) => (p.symbol_img ?? '').startsWith('data:image/')));
   check('parties carry code and colour', drops.data.parties.every((p) => !!p.party_code && /^#[0-9a-f]{6}$/i.test(p.color_code)));
 

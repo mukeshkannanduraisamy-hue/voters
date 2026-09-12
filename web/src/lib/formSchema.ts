@@ -122,27 +122,48 @@ const isBlank = (v: unknown) =>
   (Array.isArray(v) && v.length === 0);
 
 /** Mirror of the server's rule engine — decides whether a field shows. */
-export function isVisible(field: FormField, values: AnswerMap): boolean {
-  if (!field.visibility) return true;
-  const { field: dep, op, value } = field.visibility;
-  const actual = values[dep];
-  switch (op) {
-    case 'filled': return !isBlank(actual);
-    case 'empty': return isBlank(actual);
-    case 'ne': return String(actual ?? '') !== String(value);
-    case 'in': return Array.isArray(value) && value.map(String).includes(String(actual ?? ''));
-    case 'eq':
-    default: return String(actual ?? '') === String(value);
+export function isVisible(
+  field: FormField,
+  values: AnswerMap,
+  isOtherJob?: (jobId: string) => boolean
+): boolean {
+  if (field.visibility) {
+    const { field: dep, op, value } = field.visibility;
+    const actual = values[dep];
+    switch (op) {
+      case 'filled': return !isBlank(actual);
+      case 'empty': return isBlank(actual);
+      case 'ne': return String(actual ?? '') !== String(value);
+      case 'in': return Array.isArray(value) && value.map(String).includes(String(actual ?? ''));
+      case 'eq':
+      default: return String(actual ?? '') === String(value);
+    }
   }
+
+  // If other_job_text has no explicit rule, show only when an "Other" sub-job is selected
+  // or if there is already a saved non-empty value.
+  if (field.key === 'other_job_text' || field.bind === 'other_job_text') {
+    if (values[field.key]) return true;
+    const jobId = String(values.job_id ?? '');
+    if (!jobId) return false;
+    if (isOtherJob) return isOtherJob(jobId);
+    return jobId.toLowerCase() === 'other';
+  }
+
+  return true;
 }
 
 /** Client-side validation, matching the server's rules field for field. */
-export function validateAnswers(fields: FormField[], values: AnswerMap): Record<string, string> {
+export function validateAnswers(
+  fields: FormField[],
+  values: AnswerMap,
+  isOtherJob?: (jobId: string) => boolean
+): Record<string, string> {
   const errors: Record<string, string> = {};
 
   for (const field of fields) {
     if (isStructural(field.type) || field.active === false) continue;
-    if (!isVisible(field, values)) continue;
+    if (!isVisible(field, values, isOtherJob)) continue;
 
     const raw = values[field.key];
     const multi = isMulti(field.type);
@@ -186,11 +207,15 @@ export function validateAnswers(fields: FormField[], values: AnswerMap): Record<
  * Blanks out every field whose show/hide rule currently fails, so a value typed
  * before the parent answer changed never reaches the server as stale data.
  */
-export function pruneHidden(fields: FormField[], values: AnswerMap): AnswerMap {
+export function pruneHidden(
+  fields: FormField[],
+  values: AnswerMap,
+  isOtherJob?: (jobId: string) => boolean
+): AnswerMap {
   const out: AnswerMap = { ...values };
   for (const field of fields) {
     if (isStructural(field.type) || field.active === false) continue;
-    if (!isVisible(field, out)) out[field.key] = isMulti(field.type) ? [] : '';
+    if (!isVisible(field, out, isOtherJob)) out[field.key] = isMulti(field.type) ? [] : '';
   }
   return out;
 }

@@ -409,7 +409,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
               <Cell k="Occupation sector" v={s.jobCategoryTa ?? s.jobCategory ?? '—'} ta />
               <Cell k="Occupation" v={s.jobNameTa ?? s.jobName ?? '—'} ta />
               {s.otherJobText && <Cell k="Custom job note" v={s.otherJobText} span2 ta />}
-              {s.educationName && <Cell k="Education" v={s.educationNameTa ? `${s.educationNameTa} (${s.educationName})` : s.educationName} ta />}
+              {s.educationName && <Cell k="Education" v={s.educationName} />}
               {s.correctedNameTa && <Cell k="Corrected name" v={s.correctedNameTa} ta />}
               {s.correctedRelativeNameTa && <Cell k="Corrected relative name" v={s.correctedRelativeNameTa} ta />}
               {s.remarks && <Cell k="Remarks" v={s.remarks} span2 ta />}

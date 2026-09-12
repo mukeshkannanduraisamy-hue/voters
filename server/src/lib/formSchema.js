@@ -240,8 +240,8 @@ export async function resolveMasterOptions(masterKey) {
 
     case 'education':
       return (await db.prepare(
-        `SELECT id, name, name_ta FROM education_master WHERE is_active = 1 ORDER BY id`
-      ).all()).map((r) => ({ value: String(r.id), label: r.name, labelTa: r.name_ta }));
+        `SELECT id, name FROM education_master WHERE is_active = 1 ORDER BY id`
+      ).all()).map((r) => ({ value: String(r.id), label: r.name, labelTa: null }));
 
     case 'party':
       return (await db.prepare(
@@ -281,8 +281,17 @@ const isBlank = (v) => v === undefined || v === null || (typeof v === 'string' &
   (Array.isArray(v) && v.length === 0);
 
 /** Evaluates one field's show/hide rule against the answers collected so far. */
-export function isVisible(field, values) {
-  if (!field.visibility) return true;
+export function isVisible(field, values, isOtherJob) {
+  if (!field.visibility) {
+    if (field.key === 'other_job_text' || field.bind === 'other_job_text') {
+      if (values[field.key]) return true;
+      const jobId = String(values.job_id ?? '');
+      if (!jobId) return false;
+      if (isOtherJob) return isOtherJob(jobId);
+      return jobId.toLowerCase() === 'other';
+    }
+    return true;
+  }
   const { field: dep, op, value } = field.visibility;
   const actual = values[dep];
   switch (op) {
@@ -316,12 +325,28 @@ export async function validateSubmission(fields, submitted) {
     return optionCache.get(masterKey);
   };
 
+  const isOtherJobServer = async (jobId) => {
+    if (!jobId) return false;
+    const jobOpts = await optionsFor('job');
+    const opt = jobOpts.find((o) => String(o.value) === String(jobId));
+    if (opt) {
+      const l = (opt.label || '').trim().toLowerCase();
+      const lTa = (opt.labelTa || '').trim();
+      return l === 'other' || l.startsWith('other') || lTa === 'மற்றவை' || lTa.startsWith('மற்றவை');
+    }
+    return String(jobId).toLowerCase() === 'other';
+  };
+
   for (const field of fields) {
     if (STRUCTURAL_TYPES.has(field.type) || !field.active) continue;
 
     // A hidden field contributes nothing — and is actively cleared, so a value
     // typed before the parent answer changed can't survive as stale data.
-    if (!isVisible(field, values)) {
+    const isFieldVisible = field.key === 'other_job_text' || field.bind === 'other_job_text'
+      ? (field.visibility ? isVisible(field, values) : (Boolean(submitted?.[field.key]) || await isOtherJobServer(submitted?.job_id)))
+      : isVisible(field, values);
+
+    if (!isFieldVisible) {
       values[field.key] = MULTI_TYPES.has(field.type) ? [] : '';
       if (field.bind) systemValues[field.bind] = null;
       else if (!field.transient) answers[field.key] = null;

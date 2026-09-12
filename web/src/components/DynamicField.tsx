@@ -15,13 +15,35 @@ import { isMulti, isVisible } from '../lib/formSchema';
  * and the live survey both mount these and would otherwise double-fetch.
  */
 const optionCache = new Map<string, Promise<FieldOption[]>>();
+let cachedJobOptions: FieldOption[] = [];
+
+export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
+  if (!jobId) return false;
+  const list = options && options.length > 0 ? options : cachedJobOptions;
+  const opt = list.find((o) => String(o.value) === String(jobId));
+  if (opt) {
+    const l = (opt.label || '').trim().toLowerCase();
+    const lTa = (opt.labelTa || '').trim();
+    return l === 'other' || l.startsWith('other') || lTa === 'மற்றவை' || lTa.startsWith('மற்றவை');
+  }
+  return jobId.toLowerCase() === 'other';
+}
 
 export function fetchMasterOptions(master: string): Promise<FieldOption[]> {
   if (!optionCache.has(master)) {
-    optionCache.set(master, api.get<FieldOption[]>(`/api/form-schema/options/${encodeURIComponent(master)}`)
-      .catch(() => [] as FieldOption[]));
+    const p = api.get<FieldOption[]>(`/api/form-schema/options/${encodeURIComponent(master)}`)
+      .then((opts) => {
+        if (master === 'job') cachedJobOptions = opts;
+        return opts;
+      })
+      .catch(() => [] as FieldOption[]);
+    optionCache.set(master, p);
   }
   return optionCache.get(master)!;
+}
+
+if (typeof window !== 'undefined') {
+  void fetchMasterOptions('job').catch(() => {});
 }
 
 /** Drops the cache so a freshly edited master list shows up without a reload. */
@@ -55,26 +77,49 @@ export function DynamicField({
   pickingContact?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
+  if (field.source?.kind === 'master' && field.source.master === 'job' && allOptions.length > 0) {
+    cachedJobOptions = allOptions;
+  }
+
+  const parentKey = field.source?.parentField;
+  const parentValue = parentKey ? String(values[parentKey] ?? '') : '';
+  const isParentMissing = Boolean(parentKey && !parentValue);
 
   // A cascading child (sub-job under sector) only offers the options whose
   // parent matches whatever the parent field currently holds.
   const options = useMemo(() => {
-    const parentKey = field.source?.parentField;
     if (!parentKey) return allOptions;
-    const parentValue = String(values[parentKey] ?? '');
-    if (!parentValue) return allOptions;
+    if (!parentValue) return [];
     return allOptions.filter((o) => o.parent === undefined || o.parent === null || String(o.parent) === parentValue);
-  }, [allOptions, field.source?.parentField, values]);
+  }, [allOptions, parentKey, parentValue]);
+
+  // When a parent field changes or is cleared, clear this child field if its
+  // current value is no longer one of the valid options for the new parent.
+  useEffect(() => {
+    if (!parentKey) return;
+    const currentVal = String(values[field.key] ?? '');
+    if (!currentVal) return;
+
+    if (!parentValue) {
+      onChange(field.key, '');
+    } else if (allOptions.length > 0) {
+      const match = allOptions.find((o) => String(o.value) === currentVal && (o.parent === undefined || o.parent === null || String(o.parent) === parentValue));
+      if (!match) {
+        onChange(field.key, '');
+      }
+    }
+  }, [parentKey, parentValue, field.key, values, allOptions, onChange]);
 
   if (field.active === false) return null;
-  if (!isVisible(field, values)) return null;
+  if (!isVisible(field, values, isOtherJob)) return null;
 
+  const isEducation = field.bind === 'education_id' || field.source?.master === 'education';
   const err = errors[field.key];
   const raw = values[field.key];
-  const label = tamilFirst && field.labelTa ? `${field.label} / ${field.labelTa}` : field.label;
-  const hint = tamilFirst && field.hintTa ? `${field.hint ?? ''} ${field.hintTa}`.trim() : field.hint ?? undefined;
+  const label = !isEducation && tamilFirst && field.labelTa ? `${field.label} / ${field.labelTa}` : field.label;
+  const hint = !isEducation && tamilFirst && field.hintTa ? `${field.hint ?? ''} ${field.hintTa}`.trim() : field.hint ?? undefined;
   const placeholder = field.placeholder ?? field.placeholderTa ?? undefined;
-  const optLabel = (o: FieldOption) => (o.labelTa ? `${o.labelTa} (${o.label})` : o.label);
+  const optLabel = (o: FieldOption) => (!isEducation && o.labelTa ? `${o.labelTa} (${o.label})` : o.label);
 
   /* ---- layout-only elements ---- */
   if (field.type === 'section') {
@@ -129,28 +174,41 @@ export function DynamicField({
             label={str === 'true' ? 'Yes / ஆம்' : 'No / இல்லை'} />
         );
 
-      case 'select':
+      case 'select': {
+        const placeholderText = isParentMissing
+          ? 'Select occupation sector first… / முதலில் தொழில் துறையைத் தேர்ந்தெடுக்கவும்'
+          : (placeholder ?? 'Select…');
         return (
-          <Select value={str} invalid={!!err} onChange={(e) => onChange(field.key, e.target.value)}>
-            <option value="">Select…</option>
+          <Select
+            value={str}
+            disabled={isParentMissing}
+            invalid={!!err}
+            onChange={(e) => onChange(field.key, e.target.value)}
+          >
+            <option value="">{placeholderText}</option>
             {options.map((o) => <option key={o.value} value={o.value}>{optLabel(o)}</option>)}
           </Select>
         );
+      }
 
       case 'radio':
         return (
           <div className="pill-group" role="radiogroup" aria-label={field.label}>
-            {options.map((o) => (
-              <button
-                key={o.value} type="button" role="radio" aria-checked={str === o.value}
-                className={`pill ${str === o.value ? 'on' : ''}`}
-                // Tapping the chosen pill again clears it, so an optional
-                // question can be un-answered without reloading the form.
-                onClick={() => onChange(field.key, str === o.value ? '' : o.value)}
-              >
-                {optLabel(o)}
-              </button>
-            ))}
+            {isParentMissing ? (
+              <span className="t-sm t-muted">Select occupation sector first… / முதலில் தொழில் துறையைத் தேர்ந்தெடுக்கவும்</span>
+            ) : (
+              options.map((o) => (
+                <button
+                  key={o.value} type="button" role="radio" aria-checked={str === o.value}
+                  className={`pill ${str === o.value ? 'on' : ''}`}
+                  // Tapping the chosen pill again clears it, so an optional
+                  // question can be un-answered without reloading the form.
+                  onClick={() => onChange(field.key, str === o.value ? '' : o.value)}
+                >
+                  {optLabel(o)}
+                </button>
+              ))
+            )}
           </div>
         );
 
@@ -223,7 +281,7 @@ export function DynamicFieldGrid({
   return (
     <div className="dyn-grid">
       {fields.filter((f) => f.active !== false).map((f) => {
-        if (!isVisible(f, values)) return null;
+        if (!isVisible(f, values, isOtherJob)) return null;
         const span = f.type === 'section' || f.type === 'divider' || f.type === 'notice' ? 'full' : f.width;
         return (
           <div key={f.key} className={`dyn-cell dyn-${span}`}>

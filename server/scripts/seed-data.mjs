@@ -71,6 +71,7 @@ export const JOB_SECTORS = [
       { name: 'Horticulture',          name_ta: 'தோட்டக்கலை' },
       { name: 'Coconut / Areca Grower',name_ta: 'தென்னை / பாக்கு விவசாயி' },
       { name: 'Fisherman',             name_ta: 'மீனவர்' },
+      { name: 'Other',                 name_ta: 'மற்றவை' },
     ],
   },
   {
@@ -82,6 +83,7 @@ export const JOB_SECTORS = [
       { name: 'Electrician',        name_ta: 'மின் பணியாளர்' },
       { name: 'Plumber',            name_ta: 'குழாய் பணியாளர்' },
       { name: 'Stone Quarry Worker',name_ta: 'கல் குவாரி தொழிலாளி' },
+      { name: 'Other',              name_ta: 'மற்றவை' },
     ],
   },
   {
@@ -92,6 +94,7 @@ export const JOB_SECTORS = [
       { name: 'Power Loom Worker', name_ta: 'விசைத்தறி தொழிலாளி' },
       { name: 'Machine Operator',  name_ta: 'இயந்திர இயக்குநர்' },
       { name: 'Factory Labourer',  name_ta: 'தொழிற்சாலை கூலி' },
+      { name: 'Other',             name_ta: 'மற்றவை' },
     ],
   },
   {
@@ -103,6 +106,7 @@ export const JOB_SECTORS = [
       { name: 'Health Worker',      name_ta: 'சுகாதார பணியாளர்' },
       { name: 'Village Administrative Officer', name_ta: 'கிராம நிர்வாக அலுவலர்' },
       { name: 'Government Clerk',   name_ta: 'அரசு எழுத்தர்' },
+      { name: 'Other',              name_ta: 'மற்றவை' },
     ],
   },
   {
@@ -115,6 +119,7 @@ export const JOB_SECTORS = [
       { name: 'Hotel / Tea Shop',  name_ta: 'ஹோட்டல் / டீ கடை' },
       { name: 'Petty Trader',      name_ta: 'சிறு வியாபாரி' },
       { name: 'Contractor',        name_ta: 'ஒப்பந்தக்காரர்' },
+      { name: 'Other',             name_ta: 'மற்றவை' },
     ],
   },
   {
