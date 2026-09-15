@@ -275,17 +275,12 @@ router.patch('/job/sector/rename', requireRole(ROLES.A1), async (req, res, next)
   }
 });
 
-/**
- * DELETE /api/masters/job/sector/:category — delete all jobs in a sector,
- * except any entry named "Other" — that one is load-bearing for the survey
- * form's cascading defaults and stays behind (disable it instead if a sector
- * genuinely shouldn't offer a custom-note fallback).
- */
+/** DELETE /api/masters/job/sector/:category — delete all jobs in a sector. */
 router.delete('/job/sector/:category', requireRole(ROLES.A1), async (req, res, next) => {
   try {
     const category = decodeURIComponent(String(req.params.category)).trim();
     const usedRow = await db.prepare(
-      `SELECT COUNT(*) c FROM voter_surveys s JOIN job_master j ON j.id = s.job_id WHERE j.category = ? AND LOWER(j.name) <> 'other'`
+      `SELECT COUNT(*) c FROM voter_surveys s JOIN job_master j ON j.id = s.job_id WHERE j.category = ?`
     ).get(category);
     const used = usedRow?.c ?? 0;
     if (used > 0 && req.query.force !== '1') {
@@ -294,8 +289,8 @@ router.delete('/job/sector/:category', requireRole(ROLES.A1), async (req, res, n
         usage_count: used,
       });
     }
-    const info = await db.prepare(`DELETE FROM job_master WHERE category = ? AND LOWER(name) <> 'other'`).run(category);
-    audit(req.user.id, 'MASTER_DELETED', 'job_master', null, `Deleted sector "${category}" (${info.changes} jobs, "Other" kept)`);
+    const info = await db.prepare('DELETE FROM job_master WHERE category = ?').run(category);
+    audit(req.user.id, 'MASTER_DELETED', 'job_master', null, `Deleted sector "${category}" (${info.changes} jobs)`);
     res.json({ ok: true, deleted: info.changes });
   } catch (err) {
     next(err);
@@ -571,14 +566,6 @@ router.delete('/:type/:id', requireRole(ROLES.A1), async (req, res, next) => {
     const def = DELETABLE[String(req.params.type).toLowerCase()];
     if (!def) return res.status(404).json({ error: 'Unknown master type. Use caste, job, party or education.' });
     const id = Number(req.params.id);
-
-    // "Other" is load-bearing for the survey form's cascading defaults and
-    // custom-note fallback — deleting it (as opposed to disabling it) would
-    // silently break that feature for whichever category it belongs to.
-    const target = await db.prepare(`SELECT name FROM ${def.table} WHERE id = ?`).get(id);
-    if (target && String(target.name).trim().toLowerCase() === 'other') {
-      return res.status(409).json({ error: '"Other" cannot be deleted — disable it instead if it should not be shown.' });
-    }
 
     const usedRow = await db.prepare(`SELECT COUNT(*) c FROM voter_surveys WHERE ${def.usage} = ?`).get(id);
     const used = usedRow?.c ?? 0;

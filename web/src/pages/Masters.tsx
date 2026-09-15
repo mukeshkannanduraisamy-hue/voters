@@ -461,7 +461,7 @@ function JobMaster() {
     setBusyId(999999);
     try {
       const res = await api.del<{ deleted: number }>(`/api/masters/job/sector/${encodeURIComponent(sectorToDelete.category)}`);
-      toast.ok('Sector deleted', `${sectorToDelete.category} (${res.deleted} sub-job(s) removed — "Other" is kept)`);
+      toast.ok('Sector deleted', `${sectorToDelete.category} (${res.deleted} sub-job(s) removed)`);
       setSectorToDelete(null);
       await load();
     } catch (err) {
@@ -620,10 +620,7 @@ function JobMaster() {
         open={!!sectorToDelete} danger title={`Delete the "${sectorToDelete?.category}" sector?`} confirmLabel="Delete sector"
         busy={busyId === 999999}
         message={
-          <>
-            This removes all {sectorToDelete?.jobs.length ?? 0} sub-job(s) in this sector except "Other",
-            which is kept so the survey form's custom-note fallback keeps working. This cannot be undone.
-          </>
+          <>This removes all {sectorToDelete?.jobs.length ?? 0} sub-job(s) in this sector permanently. This cannot be undone.</>
         }
         onCancel={() => setSectorToDelete(null)} onConfirm={() => void removeSector()}
       />
@@ -715,7 +712,7 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
     setDeletingSector(true);
     try {
       const res = await api.del<{ deleted: number }>(`/api/masters/job/sector/${encodeURIComponent(selectedSector.category)}`);
-      toast.ok('Sector deleted', `${selectedSector.category} (${res.deleted} sub-job(s) removed — "Other" is kept)`);
+      toast.ok('Sector deleted', `${selectedSector.category} (${res.deleted} sub-job(s) removed)`);
       onSaved();
     } catch (err) {
       toast.bad('Could not delete sector', err instanceof ApiError ? err.message : undefined);
@@ -775,10 +772,7 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
         open={confirmDeleteSector} danger title={`Delete the "${selectedSector?.category}" sector?`} confirmLabel="Delete sector"
         busy={deletingSector}
         message={
-          <>
-            This removes all {selectedSector?.jobs.length ?? 0} sub-job(s) in this sector except "Other",
-            which is kept so the survey form's custom-note fallback keeps working. This cannot be undone.
-          </>
+          <>This removes all {selectedSector?.jobs.length ?? 0} sub-job(s) in this sector permanently. This cannot be undone.</>
         }
         onCancel={() => setConfirmDeleteSector(false)} onConfirm={() => void deleteSector()}
       />
