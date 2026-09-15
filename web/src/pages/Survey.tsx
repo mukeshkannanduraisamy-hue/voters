@@ -8,7 +8,7 @@ import {
   Progress, fmt, fmtDate, useToast,
 } from '../components/ui';
 import { VoterRecordsPanel } from '../components/VoterRecordsPanel';
-import { DynamicFieldGrid, isOtherJob } from '../components/DynamicField';
+import { DynamicFieldGrid, isOtherJob, fetchMasterOptions } from '../components/DynamicField';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -100,7 +100,10 @@ export default function Survey() {
 
   useEffect(() => {
     api.get<FormSchema>('/api/form-schema/published')
-      .then(setSchema)
+      .then((s) => {
+        setSchema(s);
+        void fetchMasterOptions('job').catch(() => {});
+      })
       .catch(() => toast.bad('Could not load the survey form', 'Ask your Super Admin to publish a form version.'));
     api.get<DashboardStats>('/api/dashboard/stats').then(setStats).catch(() => { /* banner degrades */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps

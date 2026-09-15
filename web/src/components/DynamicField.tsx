@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import {
   Alert, Field, Input, PhoneInput, Select, Switch, Textarea,
@@ -30,24 +30,29 @@ export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
 }
 
 export function fetchMasterOptions(master: string): Promise<FieldOption[]> {
-  if (!optionCache.has(master)) {
-    const p = api.get<FieldOption[]>(`/api/form-schema/options/${encodeURIComponent(master)}`)
-      .then((opts) => {
-        if (master === 'job') cachedJobOptions = opts;
-        return opts;
-      })
-      .catch(() => [] as FieldOption[]);
-    optionCache.set(master, p);
-  }
-  return optionCache.get(master)!;
-}
+  const existing = optionCache.get(master);
+  if (existing) return existing;
 
-if (typeof window !== 'undefined') {
-  void fetchMasterOptions('job').catch(() => {});
+  const p = api.get<FieldOption[]>(`/api/form-schema/options/${encodeURIComponent(master)}`)
+    .then((opts) => {
+      if (master === 'job') cachedJobOptions = opts;
+      return opts;
+    })
+    .catch((err) => {
+      // Do not leave failed or unauthenticated responses poisoned in cache forever
+      optionCache.delete(master);
+      throw err;
+    });
+
+  optionCache.set(master, p);
+  return p;
 }
 
 /** Drops the cache so a freshly edited master list shows up without a reload. */
-export function clearOptionCache() { optionCache.clear(); }
+export function clearOptionCache() {
+  optionCache.clear();
+  cachedJobOptions = [];
+}
 
 export function useFieldOptions(field: FormField): FieldOption[] {
   const [remote, setRemote] = useState<FieldOption[]>([]);
@@ -55,7 +60,11 @@ export function useFieldOptions(field: FormField): FieldOption[] {
 
   useEffect(() => {
     let alive = true;
-    if (master) void fetchMasterOptions(master).then((o) => { if (alive) setRemote(o); });
+    if (master) {
+      void fetchMasterOptions(master)
+        .then((o) => { if (alive) setRemote(o); })
+        .catch(() => { if (alive) setRemote([]); });
+    }
     return () => { alive = false; };
   }, [master]);
 
@@ -93,10 +102,36 @@ export function DynamicField({
     return allOptions.filter((o) => o.parent === undefined || o.parent === null || String(o.parent) === parentValue);
   }, [allOptions, parentKey, parentValue]);
 
-  // When a parent field changes or is cleared, clear this child field if its
-  // current value is no longer one of the valid options for the new parent.
+  // Track the previous parent value to only trigger child clearing when parent actually changes
+  const prevParentRef = useRef<string | null>(null);
+
+  // Auto-populate parent if child already holds a valid value but parent was empty
+  // (e.g. re-surveying a voter with existing sub-job)
+  useEffect(() => {
+    if (!parentKey || parentValue || allOptions.length === 0) return;
+    const currentVal = String(values[field.key] ?? '');
+    if (!currentVal) return;
+    const match = allOptions.find((o) => String(o.value) === currentVal);
+    if (match?.parent) {
+      onChange(parentKey, String(match.parent));
+      prevParentRef.current = String(match.parent);
+    }
+  }, [parentKey, parentValue, field.key, values, allOptions, onChange]);
+
+  // When a parent field changes or is cleared, clear this child field only if its
+  // current value is no longer valid for the newly selected parent.
   useEffect(() => {
     if (!parentKey) return;
+
+    if (prevParentRef.current === null) {
+      prevParentRef.current = parentValue;
+      return;
+    }
+
+    if (prevParentRef.current === parentValue) return;
+
+    // Parent changed!
+    prevParentRef.current = parentValue;
     const currentVal = String(values[field.key] ?? '');
     if (!currentVal) return;
 
@@ -109,6 +144,32 @@ export function DynamicField({
       }
     }
   }, [parentKey, parentValue, field.key, values, allOptions, onChange]);
+
+  // The "Other job" note stays visible once it holds a value (so a legacy
+  // record survives even if the "Other" option is later deactivated) — but
+  // that same rule must not let a stale note survive the agent actively
+  // switching job_id to something else during this edit. Track job_id by
+  // reference and clear the note only on a real change, never on the
+  // initial seed, mirroring the sector→sub-job cascade above.
+  const isOtherJobField = field.key === 'other_job_text' || field.bind === 'other_job_text';
+  const jobId = isOtherJobField ? String(values.job_id ?? '') : '';
+  const prevJobIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isOtherJobField) return;
+
+    if (prevJobIdRef.current === null) {
+      prevJobIdRef.current = jobId;
+      return;
+    }
+
+    if (prevJobIdRef.current === jobId) return;
+
+    prevJobIdRef.current = jobId;
+    const currentVal = String(values[field.key] ?? '');
+    if (!currentVal) return;
+    if (!isOtherJob(jobId)) onChange(field.key, '');
+  }, [isOtherJobField, jobId, field.key, values, onChange]);
 
   if (field.active === false) return null;
   if (!isVisible(field, values, isOtherJob)) return null;

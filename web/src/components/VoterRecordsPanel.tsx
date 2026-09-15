@@ -9,7 +9,7 @@ import {
 } from './ui';
 import { LocalBodyBadge, PartyGrid, PartySymbol, SortHeader } from './spec-ui';
 import { Icon } from './icons';
-import { DynamicFieldGrid } from './DynamicField';
+import { DynamicFieldGrid, isOtherJob } from './DynamicField';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -482,7 +482,7 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
   const setAnswer = (key: string, value: string | string[]) => {
     setAnswers((prev) => {
       const next = { ...prev, [key]: value };
-      return schema ? pruneHidden(schema.fields, next) : next;
+      return schema ? pruneHidden(schema.fields, next, isOtherJob) : next;
     });
     setErrors((e) => (e[key] ? { ...e, [key]: '' } : e));
   };
@@ -492,8 +492,8 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
     setError(''); setErrors({});
     if (!schema) return;
 
-    const cleaned = pruneHidden(schema.fields, answers);
-    const found = validateAnswers(schema.fields, cleaned);
+    const cleaned = pruneHidden(schema.fields, answers, isOtherJob);
+    const found = validateAnswers(schema.fields, cleaned, isOtherJob);
     if (Object.keys(found).length) {
       setErrors(found);
       setError('Please correct the highlighted fields');
