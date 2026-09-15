@@ -591,7 +591,7 @@ function Inspector({ field, allFields, categories, onChange }: {
               value={field.source?.kind ?? 'static'}
               onChange={(kind) => onChange({
                 source: kind === 'master'
-                  ? { kind: 'master', master: categories?.system[0]?.key ?? 'caste' }
+                  ? { kind: 'master', master: '' }
                   : { kind: 'static', options: field.source?.options ?? [{ value: 'option_1', label: 'Option 1' }] },
               })}
               options={[
@@ -606,6 +606,7 @@ function Inspector({ field, allFields, categories, onChange }: {
               <Field label="Master data source">
                 <Select value={field.source.master ?? ''}
                   onChange={(e) => onChange({ source: { ...field.source, kind: 'master', master: e.target.value } })}>
+                  <option value="">Select…</option>
                   <optgroup label="Built-in">
                     {(categories?.system ?? []).map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
                   </optgroup>

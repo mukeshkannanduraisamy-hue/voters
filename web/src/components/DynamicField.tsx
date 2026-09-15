@@ -17,9 +17,6 @@ import { isMulti, isVisible } from '../lib/formSchema';
 const optionCache = new Map<string, Promise<FieldOption[]>>();
 let cachedJobOptions: FieldOption[] = [];
 
-/** The catch-all sector a blank survey defaults to — matches the seeded category name. */
-export const DEFAULT_JOB_SECTOR = 'Others / Students / Homemakers';
-
 export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
   if (!jobId) return false;
   const list = options && options.length > 0 ? options : cachedJobOptions;
@@ -29,7 +26,7 @@ export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
     const lTa = (opt.labelTa || '').trim();
     return l === 'other' || l.startsWith('other') || lTa === 'மற்றவை' || lTa.startsWith('மற்றவை');
   }
-  return jobId.toLowerCase() === 'other';
+  return jobId.toLowerCase() === 'other' || jobId === '132' || jobId === '139' || jobId === '140' || jobId === '141' || jobId === '142' || jobId === '143';
 }
 
 export function fetchMasterOptions(master: string): Promise<FieldOption[]> {
@@ -146,21 +143,6 @@ export function DynamicField({
       }
     }
   }, [parentKey, parentValue, field.key, values, allOptions, onChange]);
-
-  // A blank survey starts on the "Others / Students / Homemakers" catch-all
-  // sector with its "Other" sub-job pre-selected, so the custom job note is
-  // visible immediately instead of requiring two picks before an agent can
-  // type a freeform answer. Only fires while the sector is that default and
-  // the sub-job is genuinely empty — picking a real sub-job (or any other
-  // sector) leaves this alone.
-  const isJobIdField = field.bind === 'job_id';
-  useEffect(() => {
-    if (!isJobIdField || parentValue !== DEFAULT_JOB_SECTOR || allOptions.length === 0) return;
-    const currentVal = String(values[field.key] ?? '');
-    if (currentVal) return;
-    const otherOpt = allOptions.find((o) => String(o.parent) === parentValue && isOtherJob(String(o.value), allOptions));
-    if (otherOpt) onChange(field.key, otherOpt.value);
-  }, [isJobIdField, parentValue, allOptions, field.key, values, onChange]);
 
   // The "Other job" note stays visible once it holds a value (so a legacy
   // record survives even if the "Other" option is later deactivated) — but

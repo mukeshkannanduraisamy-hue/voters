@@ -9,7 +9,7 @@ import {
 } from './ui';
 import { LocalBodyBadge, PartyGrid, PartySymbol, SortHeader } from './spec-ui';
 import { Icon } from './icons';
-import { DynamicFieldGrid, isOtherJob, DEFAULT_JOB_SECTOR } from './DynamicField';
+import { DynamicFieldGrid, isOtherJob } from './DynamicField';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -334,11 +334,6 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
       footer={
         <>
           <Button onClick={onClose}>Close</Button>
-          {s?.phoneNumber && (
-            <a className="btn btn-secondary" href={`tel:+91${s.phoneNumber}`}>
-              <Icon name="phone" size={16} />Call {s.phoneNumber}
-            </a>
-          )}
           {canEditDirectly && (
             <Button variant="primary" icon="edit" onClick={() => setEditing(true)}>
               {voter.surveyed ? 'Edit survey' : 'Enter survey'}
@@ -475,7 +470,7 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
       } else seeded[f.key] = raw;
     }
     const sectorField = schema.fields.find((f) => f.source?.kind === 'master' && f.source.master === 'job_sector');
-    if (sectorField) seeded[sectorField.key] = s?.jobCategory || DEFAULT_JOB_SECTOR;
+    if (sectorField && s?.jobCategory) seeded[sectorField.key] = s.jobCategory;
     setAnswers(seeded);
   }, [schema, voter.epicId]);
 

@@ -13,7 +13,6 @@ async function main() {
     await db.exec('DELETE FROM survey_answers');
     await db.exec('DELETE FROM survey_field_values');
     await db.exec('DELETE FROM voter_surveys');
-    await db.exec("DELETE FROM sync_outbox WHERE table_name IN ('voter_surveys', 'survey_field_values', 'survey_answers')");
     await db.exec("DELETE FROM audit_log WHERE entity IN ('voter_survey', 'survey_answers')");
 
     const surveysAfter = (await db.prepare('SELECT count(*) c FROM voter_surveys').get())?.c ?? 0;

@@ -255,6 +255,53 @@ router.get('/job/sectors', requireRole(ROLES.A1), async (req, res, next) => {
   }
 });
 
+/** PATCH /api/masters/job/sector/rename — update a sector name across all its jobs. */
+router.patch('/job/sector/rename', requireRole(ROLES.A1), async (req, res, next) => {
+  try {
+    const from = String(req.body?.from ?? '').trim();
+    const to = String(req.body?.to ?? '').trim();
+    const toTa = req.body?.to_ta !== undefined ? String(req.body.to_ta).trim() || null : undefined;
+    if (!from || !to) return res.status(400).json({ error: 'Both original and new sector names are required' });
+
+    if (toTa !== undefined) {
+      await db.prepare('UPDATE job_master SET category = ?, category_ta = ? WHERE category = ?').run(to, toTa, from);
+    } else {
+      await db.prepare('UPDATE job_master SET category = ? WHERE category = ?').run(to, from);
+    }
+    audit(req.user.id, 'MASTER_UPDATED', 'job_master', null, `Renamed sector "${from}" -> "${to}"`);
+    res.json({ ok: true, from, to });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/masters/job/sector/:category — delete all jobs in a sector,
+ * except any entry named "Other" — that one is load-bearing for the survey
+ * form's cascading defaults and stays behind (disable it instead if a sector
+ * genuinely shouldn't offer a custom-note fallback).
+ */
+router.delete('/job/sector/:category', requireRole(ROLES.A1), async (req, res, next) => {
+  try {
+    const category = decodeURIComponent(String(req.params.category)).trim();
+    const usedRow = await db.prepare(
+      `SELECT COUNT(*) c FROM voter_surveys s JOIN job_master j ON j.id = s.job_id WHERE j.category = ? AND LOWER(j.name) <> 'other'`
+    ).get(category);
+    const used = usedRow?.c ?? 0;
+    if (used > 0 && req.query.force !== '1') {
+      return res.status(409).json({
+        error: `Jobs in this sector are in use by ${used.toLocaleString()} survey record(s). Disable them instead.`,
+        usage_count: used,
+      });
+    }
+    const info = await db.prepare(`DELETE FROM job_master WHERE category = ? AND LOWER(name) <> 'other'`).run(category);
+    audit(req.user.id, 'MASTER_DELETED', 'job_master', null, `Deleted sector "${category}" (${info.changes} jobs, "Other" kept)`);
+    res.json({ ok: true, deleted: info.changes });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/job', requireRole(ROLES.A1), async (req, res, next) => {
   try {
     const category = String(req.body?.category ?? '').trim();
@@ -524,6 +571,14 @@ router.delete('/:type/:id', requireRole(ROLES.A1), async (req, res, next) => {
     const def = DELETABLE[String(req.params.type).toLowerCase()];
     if (!def) return res.status(404).json({ error: 'Unknown master type. Use caste, job, party or education.' });
     const id = Number(req.params.id);
+
+    // "Other" is load-bearing for the survey form's cascading defaults and
+    // custom-note fallback — deleting it (as opposed to disabling it) would
+    // silently break that feature for whichever category it belongs to.
+    const target = await db.prepare(`SELECT name FROM ${def.table} WHERE id = ?`).get(id);
+    if (target && String(target.name).trim().toLowerCase() === 'other') {
+      return res.status(409).json({ error: '"Other" cannot be deleted — disable it instead if it should not be shown.' });
+    }
 
     const usedRow = await db.prepare(`SELECT COUNT(*) c FROM voter_surveys WHERE ${def.usage} = ?`).get(id);
     const used = usedRow?.c ?? 0;

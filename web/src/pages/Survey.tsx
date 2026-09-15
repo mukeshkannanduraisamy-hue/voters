@@ -8,7 +8,7 @@ import {
   Progress, fmt, fmtDate, useToast,
 } from '../components/ui';
 import { VoterRecordsPanel } from '../components/VoterRecordsPanel';
-import { DynamicFieldGrid, isOtherJob, fetchMasterOptions, DEFAULT_JOB_SECTOR } from '../components/DynamicField';
+import { DynamicFieldGrid, isOtherJob, fetchMasterOptions } from '../components/DynamicField';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -92,10 +92,8 @@ export default function Survey() {
 
     // The occupation sector isn't stored — it's a filter for the sub-job — so
     // derive it from whichever job was recorded to keep the cascade consistent.
-    // No job on file yet defaults to the catch-all sector, which in turn
-    // defaults its sub-job to "Other" so the custom note box is ready.
     const sectorField = s.fields.find((f) => f.source?.kind === 'master' && f.source.master === 'job_sector');
-    if (sectorField) out[sectorField.key] = survey?.jobCategory || DEFAULT_JOB_SECTOR;
+    if (sectorField && survey?.jobCategory) out[sectorField.key] = survey.jobCategory;
 
     return out;
   };

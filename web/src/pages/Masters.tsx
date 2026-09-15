@@ -420,6 +420,9 @@ function JobMaster() {
   const [deleting, setDeleting] = useState<JobRow | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const [addingSectorName, setAddingSectorName] = useState<string | null>(null);
+  const [sectorToEdit, setSectorToEdit] = useState<JobSectorGroup | null>(null);
+  const [sectorToDelete, setSectorToDelete] = useState<JobSectorGroup | null>(null);
 
   const load = async () => {
     setError('');
@@ -451,6 +454,22 @@ function JobMaster() {
       await load();
     } catch (err) { toast.bad('Could not delete', err instanceof ApiError ? err.message : undefined); setDeleting(null); }
     finally { setBusyId(null); }
+  };
+
+  const removeSector = async () => {
+    if (!sectorToDelete) return;
+    setBusyId(999999);
+    try {
+      await api.del(`/api/masters/job/sector/${encodeURIComponent(sectorToDelete.category)}`);
+      toast.ok('Sector deleted', sectorToDelete.category);
+      setSectorToDelete(null);
+      await load();
+    } catch (err) {
+      toast.bad('Could not delete sector', err instanceof ApiError ? err.message : undefined);
+      setSectorToDelete(null);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const filteredFlat = (flat ?? []).filter((r) =>
@@ -489,13 +508,20 @@ function JobMaster() {
           <div className="stack">
             {sectors.map((s) => (
               <div key={s.category} className="sector-card">
-                <div className="sector-head">
+                <div className="sector-head" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
                   <Icon name="folder" size={17} className="t-muted" />
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <h4>{s.category}</h4>
                     {s.category_ta && <div className="t-xs ta t-muted">{s.category_ta}</div>}
                   </div>
                   <Badge tone="brand">{s.jobs.length} sub-jobs</Badge>
+                  <Button size="sm" icon="plus" onClick={() => { setAddingSectorName(s.category); setAdding(true); }} title="Add sub-job to this sector">
+                    Add
+                  </Button>
+                  <Button size="sm" icon="edit" onClick={() => setSectorToEdit(s)} title="Rename sector">
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="danger-soft" icon="trash" aria-label="Delete sector" onClick={() => setSectorToDelete(s)} title="Delete entire sector" />
                 </div>
                 <div className="sector-body">
                   {s.jobs.map((j) => (
@@ -504,7 +530,7 @@ function JobMaster() {
                       type="button"
                       className={`job-chip ${j.is_active ? '' : 'off'}`}
                       onClick={() => setEditing(j)}
-                      title={`Edit ${j.name}`}
+                      title={`Edit or delete ${j.name}`}
                     >
                       <span className="ta">{j.name_ta ?? j.name}</span>
                       {j.name_ta && <span className="t-xs t-subtle">({j.name})</span>}
@@ -593,7 +619,7 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
   const toast = useToast();
   const isNew = !row;
   const [useCustom, setUseCustom] = useState(false);
-  const [category, setCategory] = useState(row?.category ?? sectors[0]?.category ?? '');
+  const [category, setCategory] = useState(row?.category ?? '');
   const [categoryTa, setCategoryTa] = useState(row?.category_ta ?? '');
   const [name, setName] = useState(row?.name ?? '');
   const [nameTa, setNameTa] = useState(row?.name_ta ?? '');
@@ -630,6 +656,7 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
             <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Transport & Logistics" autoFocus />
           ) : (
             <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {isNew && <option value="">Select a sector…</option>}
               {sectors.map((s) => <option key={s.category} value={s.category}>{s.category}</option>)}
               {row && !sectors.some((s) => s.category === row.category) && <option value={row.category}>{row.category}</option>}
             </Select>
