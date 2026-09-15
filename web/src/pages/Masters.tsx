@@ -460,8 +460,8 @@ function JobMaster() {
     if (!sectorToDelete) return;
     setBusyId(999999);
     try {
-      await api.del(`/api/masters/job/sector/${encodeURIComponent(sectorToDelete.category)}`);
-      toast.ok('Sector deleted', sectorToDelete.category);
+      const res = await api.del<{ deleted: number }>(`/api/masters/job/sector/${encodeURIComponent(sectorToDelete.category)}`);
+      toast.ok('Sector deleted', `${sectorToDelete.category} (${res.deleted} sub-job(s) removed — "Other" is kept)`);
       setSectorToDelete(null);
       await load();
     } catch (err) {
@@ -609,7 +609,68 @@ function JobMaster() {
           : <>This removes the sub-job permanently.</>}
         onCancel={() => setDeleting(null)} onConfirm={() => void remove()}
       />
+      {sectorToEdit && (
+        <RenameSectorModal
+          sector={sectorToEdit}
+          onClose={() => setSectorToEdit(null)}
+          onSaved={() => { setSectorToEdit(null); void load(); }}
+        />
+      )}
+      <ConfirmModal
+        open={!!sectorToDelete} danger title={`Delete the "${sectorToDelete?.category}" sector?`} confirmLabel="Delete sector"
+        busy={busyId === 999999}
+        message={
+          <>
+            This removes all {sectorToDelete?.jobs.length ?? 0} sub-job(s) in this sector except "Other",
+            which is kept so the survey form's custom-note fallback keeps working. This cannot be undone.
+          </>
+        }
+        onCancel={() => setSectorToDelete(null)} onConfirm={() => void removeSector()}
+      />
     </>
+  );
+}
+
+function RenameSectorModal({ sector, onClose, onSaved }: {
+  sector: JobSectorGroup; onClose: () => void; onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState(sector.category);
+  const [nameTa, setNameTa] = useState(sector.category_ta ?? '');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setError('');
+    const to = name.trim();
+    if (!to) { setError('Sector name is required.'); return; }
+
+    setSaving(true);
+    try {
+      await api.patch('/api/masters/job/sector/rename', { from: sector.category, to, to_ta: nameTa.trim() });
+      toast.ok('Sector renamed', `${sector.category} → ${to}`);
+      onSaved();
+    } catch (err) { setError(err instanceof ApiError ? err.message : 'Could not rename sector'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Modal open title="Rename sector" icon="folder" onClose={onClose}
+      footer={<><Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>Save changes</Button></>}>
+      {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
+      <div className="stack">
+        <Field label="Sector name (English)">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Transport & Logistics" autoFocus />
+        </Field>
+        <Field label="Sector name (Tamil)">
+          <Input className="ta" value={nameTa} onChange={(e) => setNameTa(e.target.value)} placeholder="போக்குவரத்து" />
+        </Field>
+        <div className="t-xs t-muted">
+          Renaming updates all {sector.jobs.length} sub-job(s) currently in "{sector.category}".
+        </div>
+      </div>
+    </Modal>
   );
 }
 
