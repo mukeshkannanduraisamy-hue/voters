@@ -5,7 +5,7 @@ import {
 } from './ui';
 import { PartyGrid } from './spec-ui';
 import type { AnswerMap, FieldOption, FormField } from '../lib/formSchema';
-import { isMulti, isVisible } from '../lib/formSchema';
+import { isMulti, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
 
 /* ------------------------------------------------------------------ options */
 /**
@@ -15,21 +15,43 @@ import { isMulti, isVisible } from '../lib/formSchema';
  * and the live survey both mount these and would otherwise double-fetch.
  */
 const optionCache = new Map<string, Promise<FieldOption[]>>();
-let cachedJobOptions: FieldOption[] = [];
+const cachedOptionsByMaster = new Map<string, FieldOption[]>();
 
 /** The catch-all sector whose own "Other" sub-job auto-selects itself. */
 const OTHERS_JOB_SECTOR = 'Others / Students / Homemakers';
 
-export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
-  if (!jobId) return false;
-  const list = options && options.length > 0 ? options : cachedJobOptions;
-  const opt = list.find((o) => String(o.value) === String(jobId));
-  if (opt) {
-    const l = (opt.label || '').trim().toLowerCase();
-    const lTa = (opt.labelTa || '').trim();
-    return l === 'other' || l.startsWith('other') || lTa === 'மற்றவை' || lTa.startsWith('மற்றவை');
-  }
-  return jobId.toLowerCase() === 'other' || jobId === '132' || jobId === '139' || jobId === '140' || jobId === '141' || jobId === '142' || jobId === '143';
+/** The master each "other text" field's paired select is bound to. */
+const MASTER_BY_BASE_KEY: Record<string, string> = {
+  job_id: 'job',
+  caste_id: 'caste',
+  education_id: 'education',
+};
+
+function isOtherLabel(opt?: FieldOption): boolean {
+  if (!opt) return false;
+  const l = (opt.label || '').trim().toLowerCase();
+  const lTa = (opt.labelTa || '').trim();
+  return l === 'other' || l.startsWith('other') || lTa === 'மற்றவை' || lTa.startsWith('மற்றவை');
+}
+
+/** Is `value` the "Other" option within a given (already-loaded) options list? */
+function isOtherInList(value: string, options: FieldOption[]): boolean {
+  if (!value) return false;
+  const opt = options.find((o) => String(o.value) === String(value));
+  if (opt) return isOtherLabel(opt);
+  return value.toLowerCase() === 'other';
+}
+
+/** Is `value` the "Other" option for the given master, using the option cache? */
+export function isOtherOption(master: string, value: string): boolean {
+  return isOtherInList(value, cachedOptionsByMaster.get(master) ?? []);
+}
+
+/** Resolver passed into isVisible/pruneHidden/validateAnswers — keyed by the paired select's own field key. */
+export function resolveOtherOption(baseKey: string, value: string): boolean {
+  const master = MASTER_BY_BASE_KEY[baseKey];
+  if (!master) return value.toLowerCase() === 'other';
+  return isOtherOption(master, value);
 }
 
 export function fetchMasterOptions(master: string): Promise<FieldOption[]> {
@@ -38,7 +60,7 @@ export function fetchMasterOptions(master: string): Promise<FieldOption[]> {
 
   const p = api.get<FieldOption[]>(`/api/form-schema/options/${encodeURIComponent(master)}`)
     .then((opts) => {
-      if (master === 'job') cachedJobOptions = opts;
+      cachedOptionsByMaster.set(master, opts);
       return opts;
     })
     .catch((err) => {
@@ -54,7 +76,7 @@ export function fetchMasterOptions(master: string): Promise<FieldOption[]> {
 /** Drops the cache so a freshly edited master list shows up without a reload. */
 export function clearOptionCache() {
   optionCache.clear();
-  cachedJobOptions = [];
+  cachedOptionsByMaster.clear();
 }
 
 export function useFieldOptions(field: FormField): FieldOption[] {
@@ -88,8 +110,8 @@ export function DynamicField({
   pickingContact?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
-  if (field.source?.kind === 'master' && field.source.master === 'job' && allOptions.length > 0) {
-    cachedJobOptions = allOptions;
+  if (field.source?.kind === 'master' && field.source.master && allOptions.length > 0) {
+    cachedOptionsByMaster.set(field.source.master, allOptions);
   }
 
   const parentKey = field.source?.parentField;
@@ -158,38 +180,39 @@ export function DynamicField({
     if (!isJobIdField || parentValue !== OTHERS_JOB_SECTOR || allOptions.length === 0) return;
     const currentVal = String(values[field.key] ?? '');
     if (currentVal) return;
-    const otherOpt = allOptions.find((o) => String(o.parent) === parentValue && isOtherJob(String(o.value), allOptions));
+    const otherOpt = allOptions.find((o) => String(o.parent) === parentValue && isOtherInList(String(o.value), allOptions));
     if (otherOpt) onChange(field.key, otherOpt.value);
   }, [isJobIdField, parentValue, allOptions, field.key, values, onChange]);
 
-  // The "Other job" note stays visible once it holds a value (so a legacy
-  // record survives even if the "Other" option is later deactivated) — but
-  // that same rule must not let a stale note survive the agent actively
-  // switching job_id to something else during this edit. Track job_id by
-  // reference and clear the note only on a real change, never on the
-  // initial seed, mirroring the sector→sub-job cascade above.
-  const isOtherJobField = field.key === 'other_job_text' || field.bind === 'other_job_text';
-  const jobId = isOtherJobField ? String(values.job_id ?? '') : '';
-  const prevJobIdRef = useRef<string | null>(null);
+  // A custom-note field (e.g. other_job_text, other_caste_text) stays visible
+  // once it holds a value (so a legacy record survives even if the "Other"
+  // option is later deactivated) — but that same rule must not let a stale
+  // note survive the agent actively switching its paired select to something
+  // else during this edit. Track the paired value by reference and clear the
+  // note only on a real change, never on the initial seed, mirroring the
+  // sector→sub-job cascade above.
+  const otherTextBaseKey = OTHER_TEXT_FIELDS[field.key];
+  const pairedValue = otherTextBaseKey ? String(values[otherTextBaseKey] ?? '') : '';
+  const prevPairedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!isOtherJobField) return;
+    if (!otherTextBaseKey) return;
 
-    if (prevJobIdRef.current === null) {
-      prevJobIdRef.current = jobId;
+    if (prevPairedRef.current === null) {
+      prevPairedRef.current = pairedValue;
       return;
     }
 
-    if (prevJobIdRef.current === jobId) return;
+    if (prevPairedRef.current === pairedValue) return;
 
-    prevJobIdRef.current = jobId;
+    prevPairedRef.current = pairedValue;
     const currentVal = String(values[field.key] ?? '');
     if (!currentVal) return;
-    if (!isOtherJob(jobId)) onChange(field.key, '');
-  }, [isOtherJobField, jobId, field.key, values, onChange]);
+    if (!resolveOtherOption(otherTextBaseKey, pairedValue)) onChange(field.key, '');
+  }, [otherTextBaseKey, pairedValue, field.key, values, onChange]);
 
   if (field.active === false) return null;
-  if (!isVisible(field, values, isOtherJob)) return null;
+  if (!isVisible(field, values, resolveOtherOption)) return null;
 
   const isEducation = field.bind === 'education_id' || field.source?.master === 'education';
   const err = errors[field.key];
@@ -358,7 +381,7 @@ export function DynamicFieldGrid({
   return (
     <div className="dyn-grid">
       {fields.filter((f) => f.active !== false).map((f) => {
-        if (!isVisible(f, values, isOtherJob)) return null;
+        if (!isVisible(f, values, resolveOtherOption)) return null;
         const span = f.type === 'section' || f.type === 'divider' || f.type === 'notice' ? 'full' : f.width;
         return (
           <div key={f.key} className={`dyn-cell dyn-${span}`}>

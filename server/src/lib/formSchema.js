@@ -280,15 +280,34 @@ export async function resolveMasterOptions(masterKey) {
 const isBlank = (v) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '') ||
   (Array.isArray(v) && v.length === 0);
 
+/**
+ * Custom-note fields that pair with a master-bound select — the note only
+ * shows once its paired field resolves to an "Other" option. Keyed by the
+ * note field's own key, valued by the select field it watches.
+ */
+export const OTHER_TEXT_FIELDS = {
+  other_job_text: 'job_id',
+  other_caste_text: 'caste_id',
+  other_education_text: 'education_id',
+};
+
+/** The master each of those select fields is bound to. */
+export const MASTER_BY_BASE_KEY = {
+  job_id: 'job',
+  caste_id: 'caste',
+  education_id: 'education',
+};
+
 /** Evaluates one field's show/hide rule against the answers collected so far. */
-export function isVisible(field, values, isOtherJob) {
+export function isVisible(field, values, isOtherOption) {
   if (!field.visibility) {
-    if (field.key === 'other_job_text' || field.bind === 'other_job_text') {
+    const baseKey = OTHER_TEXT_FIELDS[field.key];
+    if (baseKey) {
       if (values[field.key]) return true;
-      const jobId = String(values.job_id ?? '');
-      if (!jobId) return false;
-      if (isOtherJob) return isOtherJob(jobId);
-      return jobId.toLowerCase() === 'other';
+      const val = String(values[baseKey] ?? '');
+      if (!val) return false;
+      if (isOtherOption) return isOtherOption(baseKey, val);
+      return val.toLowerCase() === 'other';
     }
     return true;
   }
@@ -325,16 +344,18 @@ export async function validateSubmission(fields, submitted) {
     return optionCache.get(masterKey);
   };
 
-  const isOtherJobServer = async (jobId) => {
-    if (!jobId) return false;
-    const jobOpts = await optionsFor('job');
-    const opt = jobOpts.find((o) => String(o.value) === String(jobId));
+  const isOtherOptionServer = async (baseKey, value) => {
+    if (!value) return false;
+    const master = MASTER_BY_BASE_KEY[baseKey];
+    if (!master) return String(value).toLowerCase() === 'other';
+    const opts = await optionsFor(master);
+    const opt = opts.find((o) => String(o.value) === String(value));
     if (opt) {
       const l = (opt.label || '').trim().toLowerCase();
       const lTa = (opt.labelTa || '').trim();
       return l === 'other' || l.startsWith('other') || lTa === 'மற்றவை' || lTa.startsWith('மற்றவை');
     }
-    return String(jobId).toLowerCase() === 'other';
+    return String(value).toLowerCase() === 'other';
   };
 
   for (const field of fields) {
@@ -342,8 +363,9 @@ export async function validateSubmission(fields, submitted) {
 
     // A hidden field contributes nothing — and is actively cleared, so a value
     // typed before the parent answer changed can't survive as stale data.
-    const isFieldVisible = field.key === 'other_job_text' || field.bind === 'other_job_text'
-      ? (field.visibility ? isVisible(field, values) : (Boolean(submitted?.[field.key]) || await isOtherJobServer(submitted?.job_id)))
+    const otherTextBaseKey = OTHER_TEXT_FIELDS[field.key];
+    const isFieldVisible = otherTextBaseKey
+      ? (field.visibility ? isVisible(field, values) : (Boolean(submitted?.[field.key]) || await isOtherOptionServer(otherTextBaseKey, submitted?.[otherTextBaseKey])))
       : isVisible(field, values);
 
     if (!isFieldVisible) {

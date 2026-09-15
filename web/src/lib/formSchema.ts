@@ -121,11 +121,22 @@ const isBlank = (v: unknown) =>
   (typeof v === 'string' && v.trim() === '') ||
   (Array.isArray(v) && v.length === 0);
 
+/**
+ * Custom-note fields that pair with a master-bound select — the note only
+ * shows once its paired field resolves to an "Other" option. Keyed by the
+ * note field's own key, valued by the select field it watches.
+ */
+export const OTHER_TEXT_FIELDS: Record<string, string> = {
+  other_job_text: 'job_id',
+  other_caste_text: 'caste_id',
+  other_education_text: 'education_id',
+};
+
 /** Mirror of the server's rule engine — decides whether a field shows. */
 export function isVisible(
   field: FormField,
   values: AnswerMap,
-  isOtherJob?: (jobId: string) => boolean
+  isOtherOption?: (baseKey: string, value: string) => boolean
 ): boolean {
   if (field.visibility) {
     const { field: dep, op, value } = field.visibility;
@@ -140,14 +151,15 @@ export function isVisible(
     }
   }
 
-  // If other_job_text has no explicit rule, show only when an "Other" sub-job is selected
-  // or if there is already a saved non-empty value.
-  if (field.key === 'other_job_text' || field.bind === 'other_job_text') {
+  // A custom-note field with no explicit rule shows only when its paired
+  // select resolves to "Other", or if there is already a saved non-empty value.
+  const baseKey = OTHER_TEXT_FIELDS[field.key];
+  if (baseKey) {
     if (values[field.key]) return true;
-    const jobId = String(values.job_id ?? '');
-    if (!jobId) return false;
-    if (isOtherJob) return isOtherJob(jobId);
-    return jobId.toLowerCase() === 'other';
+    const val = String(values[baseKey] ?? '');
+    if (!val) return false;
+    if (isOtherOption) return isOtherOption(baseKey, val);
+    return val.toLowerCase() === 'other';
   }
 
   return true;
@@ -157,13 +169,13 @@ export function isVisible(
 export function validateAnswers(
   fields: FormField[],
   values: AnswerMap,
-  isOtherJob?: (jobId: string) => boolean
+  isOtherOption?: (baseKey: string, value: string) => boolean
 ): Record<string, string> {
   const errors: Record<string, string> = {};
 
   for (const field of fields) {
     if (isStructural(field.type) || field.active === false) continue;
-    if (!isVisible(field, values, isOtherJob)) continue;
+    if (!isVisible(field, values, isOtherOption)) continue;
 
     const raw = values[field.key];
     const multi = isMulti(field.type);
@@ -210,12 +222,12 @@ export function validateAnswers(
 export function pruneHidden(
   fields: FormField[],
   values: AnswerMap,
-  isOtherJob?: (jobId: string) => boolean
+  isOtherOption?: (baseKey: string, value: string) => boolean
 ): AnswerMap {
   const out: AnswerMap = { ...values };
   for (const field of fields) {
     if (isStructural(field.type) || field.active === false) continue;
-    if (!isVisible(field, out, isOtherJob)) out[field.key] = isMulti(field.type) ? [] : '';
+    if (!isVisible(field, out, isOtherOption)) out[field.key] = isMulti(field.type) ? [] : '';
   }
   return out;
 }
