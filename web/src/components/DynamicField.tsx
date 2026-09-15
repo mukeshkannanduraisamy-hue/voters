@@ -17,6 +17,9 @@ import { isMulti, isVisible } from '../lib/formSchema';
 const optionCache = new Map<string, Promise<FieldOption[]>>();
 let cachedJobOptions: FieldOption[] = [];
 
+/** The catch-all sector whose own "Other" sub-job auto-selects itself. */
+const OTHERS_JOB_SECTOR = 'Others / Students / Homemakers';
+
 export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
   if (!jobId) return false;
   const list = options && options.length > 0 ? options : cachedJobOptions;
@@ -143,6 +146,21 @@ export function DynamicField({
       }
     }
   }, [parentKey, parentValue, field.key, values, allOptions, onChange]);
+
+  // Picking the "Others / Students / Homemakers" catch-all sector auto-selects
+  // its own "Other" sub-job, so the custom note box appears immediately
+  // instead of requiring a second explicit pick. Only fires while the
+  // sub-job is genuinely empty on that sector — choosing a real sub-job
+  // (Homemaker, Student, etc.) leaves it alone, and picking any other
+  // sector never triggers this at all.
+  const isJobIdField = field.bind === 'job_id';
+  useEffect(() => {
+    if (!isJobIdField || parentValue !== OTHERS_JOB_SECTOR || allOptions.length === 0) return;
+    const currentVal = String(values[field.key] ?? '');
+    if (currentVal) return;
+    const otherOpt = allOptions.find((o) => String(o.parent) === parentValue && isOtherJob(String(o.value), allOptions));
+    if (otherOpt) onChange(field.key, otherOpt.value);
+  }, [isJobIdField, parentValue, allOptions, field.key, values, onChange]);
 
   // The "Other job" note stays visible once it holds a value (so a legacy
   // record survives even if the "Other" option is later deactivated) — but
