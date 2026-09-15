@@ -687,6 +687,10 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
   const [active, setActive] = useState(row?.is_active ?? true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteSector, setConfirmDeleteSector] = useState(false);
+  const [deletingSector, setDeletingSector] = useState(false);
+
+  const selectedSector = sectors.find((s) => s.category === category);
 
   const save = async () => {
     setError('');
@@ -706,6 +710,21 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
     finally { setSaving(false); }
   };
 
+  const deleteSector = async () => {
+    if (!selectedSector) return;
+    setDeletingSector(true);
+    try {
+      const res = await api.del<{ deleted: number }>(`/api/masters/job/sector/${encodeURIComponent(selectedSector.category)}`);
+      toast.ok('Sector deleted', `${selectedSector.category} (${res.deleted} sub-job(s) removed — "Other" is kept)`);
+      onSaved();
+    } catch (err) {
+      toast.bad('Could not delete sector', err instanceof ApiError ? err.message : undefined);
+      setConfirmDeleteSector(false);
+    } finally {
+      setDeletingSector(false);
+    }
+  };
+
   return (
     <Modal open title={isNew ? 'Add new sub-job' : 'Edit sub-job'} icon="briefcase" onClose={onClose}
       footer={<><Button onClick={onClose} disabled={saving}>Cancel</Button>
@@ -716,11 +735,22 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
           {useCustom ? (
             <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Transport & Logistics" autoFocus />
           ) : (
-            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {isNew && <option value="">Select a sector…</option>}
-              {sectors.map((s) => <option key={s.category} value={s.category}>{s.category}</option>)}
-              {row && !sectors.some((s) => s.category === row.category) && <option value={row.category}>{row.category}</option>}
-            </Select>
+            <div className="row tight" style={{ alignItems: 'stretch' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  {isNew && <option value="">Select a sector…</option>}
+                  {sectors.map((s) => <option key={s.category} value={s.category}>{s.category}</option>)}
+                  {row && !sectors.some((s) => s.category === row.category) && <option value={row.category}>{row.category}</option>}
+                </Select>
+              </div>
+              {selectedSector && (
+                <Button
+                  size="sm" variant="danger-soft" icon="trash" aria-label="Delete this sector"
+                  title={`Delete the "${selectedSector.category}" sector`}
+                  onClick={() => setConfirmDeleteSector(true)}
+                />
+              )}
+            </div>
           )}
         </Field>
         <Button size="sm" icon={useCustom ? 'list' : 'plus'} onClick={() => setUseCustom((c) => !c)}>
@@ -741,6 +771,17 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
         </Field>
         <Field label="Status"><Switch checked={active} onChange={setActive} label={active ? 'Active' : 'Disabled'} /></Field>
       </div>
+      <ConfirmModal
+        open={confirmDeleteSector} danger title={`Delete the "${selectedSector?.category}" sector?`} confirmLabel="Delete sector"
+        busy={deletingSector}
+        message={
+          <>
+            This removes all {selectedSector?.jobs.length ?? 0} sub-job(s) in this sector except "Other",
+            which is kept so the survey form's custom-note fallback keeps working. This cannot be undone.
+          </>
+        }
+        onCancel={() => setConfirmDeleteSector(false)} onConfirm={() => void deleteSector()}
+      />
     </Modal>
   );
 }
