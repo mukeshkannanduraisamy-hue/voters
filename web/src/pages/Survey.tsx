@@ -8,7 +8,7 @@ import {
   Progress, fmt, fmtDate, useToast,
 } from '../components/ui';
 import { VoterRecordsPanel } from '../components/VoterRecordsPanel';
-import { DynamicFieldGrid, isOtherJob, fetchMasterOptions } from '../components/DynamicField';
+import { DynamicFieldGrid, isOtherJob, fetchMasterOptions, DEFAULT_JOB_SECTOR } from '../components/DynamicField';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -92,8 +92,10 @@ export default function Survey() {
 
     // The occupation sector isn't stored — it's a filter for the sub-job — so
     // derive it from whichever job was recorded to keep the cascade consistent.
+    // No job on file yet defaults to the catch-all sector, which in turn
+    // defaults its sub-job to "Other" so the custom note box is ready.
     const sectorField = s.fields.find((f) => f.source?.kind === 'master' && f.source.master === 'job_sector');
-    if (sectorField && survey?.jobCategory) out[sectorField.key] = survey.jobCategory;
+    if (sectorField) out[sectorField.key] = survey?.jobCategory || DEFAULT_JOB_SECTOR;
 
     return out;
   };
@@ -356,24 +358,8 @@ export default function Survey() {
           {voter.surveyed && (
             <div className="mb-4">
               <Alert tone="ok">
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                  <div>
-                    <strong>Already surveyed</strong> on {fmtDate(voter.survey?.surveyedAt, true)}
-                    {voter.survey?.agentName && <> by {voter.survey.agentName}</>}. Saving again will update the record.
-                  </div>
-                  {voter.survey?.phoneNumber && (
-                    <a
-                      href={`tel:+91${voter.survey.phoneNumber.replace(/\D/g, '').slice(-10)}`}
-                      className="input-call-btn"
-                      style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, margin: 0 }}
-                      title={`Call +91 ${voter.survey.phoneNumber}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Icon name="phone" size={14} />
-                      <span>Call +91 {voter.survey.phoneNumber}</span>
-                    </a>
-                  )}
-                </div>
+                <strong>Already surveyed</strong> on {fmtDate(voter.survey?.surveyedAt, true)}
+                {voter.survey?.agentName && <> by {voter.survey.agentName}</>}. Saving again will update the record.
               </Alert>
             </div>
           )}
@@ -473,7 +459,6 @@ export default function Survey() {
                     values={answers}
                     errors={errors}
                     onChange={setAnswer}
-                    allowCall={true}
                     onPickContact={phoneFieldKey ? () => void handlePickContact() : undefined}
                     pickingContact={pickingContact}
                   />

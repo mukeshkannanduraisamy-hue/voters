@@ -17,6 +17,9 @@ import { isMulti, isVisible } from '../lib/formSchema';
 const optionCache = new Map<string, Promise<FieldOption[]>>();
 let cachedJobOptions: FieldOption[] = [];
 
+/** The catch-all sector a blank survey defaults to — matches the seeded category name. */
+export const DEFAULT_JOB_SECTOR = 'Others / Students / Homemakers';
+
 export function isOtherJob(jobId: string, options?: FieldOption[]): boolean {
   if (!jobId) return false;
   const list = options && options.length > 0 ? options : cachedJobOptions;
@@ -73,7 +76,7 @@ export function useFieldOptions(field: FormField): FieldOption[] {
 
 /* ------------------------------------------------------------------- field */
 export function DynamicField({
-  field, values, errors, onChange, tamilFirst = true, allowCall = false,
+  field, values, errors, onChange, tamilFirst = true,
   onPickContact, pickingContact = false,
 }: {
   field: FormField;
@@ -81,7 +84,6 @@ export function DynamicField({
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
   tamilFirst?: boolean;
-  allowCall?: boolean;
   onPickContact?: () => void;
   pickingContact?: boolean;
 }) {
@@ -144,6 +146,21 @@ export function DynamicField({
       }
     }
   }, [parentKey, parentValue, field.key, values, allOptions, onChange]);
+
+  // A blank survey starts on the "Others / Students / Homemakers" catch-all
+  // sector with its "Other" sub-job pre-selected, so the custom job note is
+  // visible immediately instead of requiring two picks before an agent can
+  // type a freeform answer. Only fires while the sector is that default and
+  // the sub-job is genuinely empty — picking a real sub-job (or any other
+  // sector) leaves this alone.
+  const isJobIdField = field.bind === 'job_id';
+  useEffect(() => {
+    if (!isJobIdField || parentValue !== DEFAULT_JOB_SECTOR || allOptions.length === 0) return;
+    const currentVal = String(values[field.key] ?? '');
+    if (currentVal) return;
+    const otherOpt = allOptions.find((o) => String(o.parent) === parentValue && isOtherJob(String(o.value), allOptions));
+    if (otherOpt) onChange(field.key, otherOpt.value);
+  }, [isJobIdField, parentValue, allOptions, field.key, values, onChange]);
 
   // The "Other job" note stays visible once it holds a value (so a legacy
   // record survives even if the "Other" option is later deactivated) — but
@@ -218,7 +235,7 @@ export function DynamicField({
       case 'phone':
         return (
           <PhoneInput value={str} placeholder={placeholder ?? '9840112233'} invalid={!!err}
-            onChange={(v) => onChange(field.key, v)} allowCall={allowCall}
+            onChange={(v) => onChange(field.key, v)}
             onPickContact={onPickContact} pickingContact={pickingContact} />
         );
 
@@ -329,13 +346,12 @@ export function DynamicField({
  * row at every section header so cards stay visually grouped.
  */
 export function DynamicFieldGrid({
-  fields, values, errors, onChange, allowCall = false, onPickContact, pickingContact = false,
+  fields, values, errors, onChange, onPickContact, pickingContact = false,
 }: {
   fields: FormField[];
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
-  allowCall?: boolean;
   onPickContact?: () => void;
   pickingContact?: boolean;
 }) {
@@ -347,7 +363,7 @@ export function DynamicFieldGrid({
         return (
           <div key={f.key} className={`dyn-cell dyn-${span}`}>
             <DynamicField
-              field={f} values={values} errors={errors} onChange={onChange} allowCall={allowCall}
+              field={f} values={values} errors={errors} onChange={onChange}
               onPickContact={onPickContact} pickingContact={pickingContact}
             />
           </div>

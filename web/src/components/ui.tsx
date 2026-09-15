@@ -204,17 +204,14 @@ export function Textarea({ invalid, className = '', ...rest }: { invalid?: boole
  * markup at five call sites) means it always picks up its Field's label id.
  */
 export function PhoneInput({
-  invalid, value, onChange, placeholder = '9876543210', allowCall = false,
+  invalid, value, onChange, placeholder = '9876543210',
   onPickContact, pickingContact = false, ...rest
 }: {
-  invalid?: boolean; value: string; onChange: (digits: string) => void; placeholder?: string; allowCall?: boolean;
+  invalid?: boolean; value: string; onChange: (digits: string) => void; placeholder?: string;
   /** When supplied, renders a "Contacts" button that hands off to the caller's own import flow (device Contact Picker / clipboard / intent fallback). */
   onPickContact?: () => void; pickingContact?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const id = useFieldId(rest.id);
-  const cleanDigits = (value || '').replace(/\D/g, '');
-  const hasCallNumber = cleanDigits.length >= 5;
-  const telNumber = cleanDigits.length === 10 ? `+91${cleanDigits}` : cleanDigits;
 
   return (
     <div className="phone-input-container">
@@ -243,33 +240,7 @@ export function PhoneInput({
             {pickingContact ? <span className="spinner" /> : <Icon name="users" size={14} />}
           </button>
         )}
-        {allowCall && hasCallNumber && (
-          <a
-            href={`tel:${telNumber}`}
-            className="input-call-btn"
-            title={`Call ${telNumber}`}
-            aria-label={`Call ${telNumber}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Icon name="phone" size={14} />
-            <span className="call-btn-text">Call</span>
-          </a>
-        )}
       </div>
-      {allowCall && hasCallNumber && (
-        <div className="phone-dialer-row">
-          <span className="t-xs t-muted">Tap to call:</span>
-          <a
-            href={`tel:${telNumber}`}
-            className="phone-dialer-pill"
-            title={`Open dialer for ${telNumber}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Icon name="phone" size={12} />
-            <span className="mono font-semibold">{telNumber}</span>
-          </a>
-        </div>
-      )}
     </div>
   );
 }
