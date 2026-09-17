@@ -103,12 +103,15 @@ export function useFieldOptions(field: FormField): FieldOption[] {
 /* ------------------------------------------------------------------- field */
 export function DynamicField({
   field, values, errors, onChange, tamilFirst = true,
+  onPickContact, pickingContact = false,
 }: {
   field: FormField;
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
   tamilFirst?: boolean;
+  onPickContact?: () => void;
+  pickingContact?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
   if (field.source?.kind === 'master' && field.source.master && allOptions.length > 0) {
@@ -265,7 +268,8 @@ export function DynamicField({
       case 'phone':
         return (
           <PhoneInput value={str} placeholder={placeholder ?? '9840112233'} invalid={!!err}
-            onChange={(v) => onChange(field.key, v)} />
+            onChange={(v) => onChange(field.key, v)}
+            onPickContact={onPickContact} pickingContact={pickingContact} />
         );
 
       case 'date':
@@ -387,12 +391,14 @@ export function DynamicField({
  * row at every section header so cards stay visually grouped.
  */
 export function DynamicFieldGrid({
-  fields, values, errors, onChange,
+  fields, values, errors, onChange, onPickContact, pickingContact = false,
 }: {
   fields: FormField[];
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
+  onPickContact?: () => void;
+  pickingContact?: boolean;
 }) {
   return (
     <div className="dyn-grid">
@@ -403,6 +409,7 @@ export function DynamicFieldGrid({
           <div key={f.key} className={`dyn-cell dyn-${span}`}>
             <DynamicField
               field={f} values={values} errors={errors} onChange={onChange}
+              onPickContact={onPickContact} pickingContact={pickingContact}
             />
           </div>
         );

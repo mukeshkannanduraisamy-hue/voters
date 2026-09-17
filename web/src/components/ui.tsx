@@ -204,9 +204,12 @@ export function Textarea({ invalid, className = '', ...rest }: { invalid?: boole
  * markup at five call sites) means it always picks up its Field's label id.
  */
 export function PhoneInput({
-  invalid, value, onChange, placeholder = '9876543210', ...rest
+  invalid, value, onChange, placeholder = '9876543210',
+  onPickContact, pickingContact = false, ...rest
 }: {
   invalid?: boolean; value: string; onChange: (digits: string) => void; placeholder?: string;
+  /** When supplied, renders a "Contacts" button that hands off to the caller's own import flow (device Contact Picker / clipboard / intent fallback). */
+  onPickContact?: () => void; pickingContact?: boolean;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const id = useFieldId(rest.id);
 
@@ -225,6 +228,18 @@ export function PhoneInput({
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 10))}
         />
+        {onPickContact && (
+          <button
+            type="button"
+            className="input-contact-btn"
+            title="Import from device contacts / தொடர்புகளிலிருந்து இறக்குமதி செய்க"
+            aria-label="Import from contacts"
+            disabled={pickingContact}
+            onClick={(e) => { e.stopPropagation(); onPickContact(); }}
+          >
+            {pickingContact ? <span className="spinner" /> : <Icon name="users" size={14} />}
+          </button>
+        )}
       </div>
     </div>
   );

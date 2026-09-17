@@ -20,6 +20,12 @@ interface Corrections {
   correctedRelativeNameTa: string;
 }
 
+/** Keeps only the last 10 digits, which strips a leading "91" country code or "0" trunk prefix either way. */
+const last10Digits = (raw: string) => {
+  const digits = raw.replace(/\D/g, '');
+  return digits.length > 10 ? digits.slice(-10) : digits;
+};
+
 const EMPTY_CORRECTIONS: Corrections = { correctedNameTa: '', correctedRelativeNameTa: '' };
 
 export default function Survey() {
@@ -40,7 +46,7 @@ export default function Survey() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
-  const [recordsRefreshKey, setRecordsRefreshKey] = useState(0);
+  const [pickingContact, setPickingContact] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
   /** `epicId::schemaVersion` already seeded, so a re-render never wipes edits. */
   const seededFor = useRef('');
@@ -219,6 +225,94 @@ export default function Survey() {
     clearAll(); // "redirect to main page" — back to the search landing state
   };
 
+  /** The first phone field in the schema, so Contacts import targets the right key. */
+  const phoneFieldKey = useMemo(
+    () => schema?.fields.find((f) => f.type === 'phone' && f.active !== false)?.key ?? null,
+    [schema]
+  );
+
+  /** Opens device Contacts app (Android / Chrome) to search and pick a phone number. */
+  const handlePickContact = async () => {
+    // 1. Native Web Contact Picker API (Chrome on Android)
+    if ('contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        setPickingContact(true);
+        let props = ['tel'];
+        if (typeof (navigator as any).contacts?.getProperties === 'function') {
+          const supported = await (navigator as any).contacts.getProperties();
+          props = ['tel', 'name'].filter((p) => supported.includes(p));
+          if (!props.includes('tel')) props.push('tel');
+        }
+        const contacts = await (navigator as any).contacts.select(props, { multiple: false });
+        if (contacts && contacts.length > 0) {
+          const c = contacts[0];
+          const rawTel = Array.isArray(c.tel) ? c.tel[0] : c.tel;
+          if (rawTel) {
+            const digits = last10Digits(String(rawTel));
+            if (digits.length === 10) {
+              if (phoneFieldKey) setAnswer(phoneFieldKey, digits);
+              const cName = c.name ? (Array.isArray(c.name) ? c.name[0] : c.name) : '';
+              toast.ok('Contact imported', cName ? `${cName}: ${digits}` : digits);
+            } else if (digits.length > 0) {
+              if (phoneFieldKey) setAnswer(phoneFieldKey, digits);
+              toast.warn('Check phone number', `Imported: ${digits} (please verify 10 digits)`);
+            } else {
+              toast.bad('No telephone digits', 'Selected contact has no numeric phone number.');
+            }
+          } else {
+            toast.bad('No telephone number', 'Selected contact has no telephone number.');
+          }
+        }
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.warn('Contact picker error:', err);
+          toast.bad('Could not open contacts', err?.message || 'Contact selection was interrupted.');
+        }
+      } finally {
+        setPickingContact(false);
+      }
+      return;
+    }
+
+    // 2. Clipboard fallback (if user already copied a number from Contacts/dialer)
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      try {
+        const text = await navigator.clipboard.readText();
+        const digits = last10Digits(text);
+        if (digits.length === 10 && /^[6-9]\d{9}$/.test(digits)) {
+          if (phoneFieldKey) setAnswer(phoneFieldKey, digits);
+          toast.ok('Number imported from clipboard', digits);
+          return;
+        }
+      } catch {
+        // Clipboard read permission denied or empty
+      }
+    }
+
+    // 3. Android fallback: the JS Contact Picker API is Chrome/Edge-on-Android
+    // only, but ANY Android browser can be told to navigate to an `intent://`
+    // URL — the OS intercepts that navigation and opens the device's actual
+    // default Contacts app at its native "pick a phone number" screen. This
+    // can't hand the selection back to the page (no such channel exists
+    // outside the Web API), so we guide the agent to copy the number there
+    // and come straight back — the clipboard check above will then pick it
+    // up automatically on their next tap of this same button.
+    if (/Android/i.test(navigator.userAgent)) {
+      toast.info('Opening Contacts…', 'Pick the voter, copy their number, then tap "Contacts" again to import it.');
+      window.location.href =
+        'intent://contacts/#Intent;action=android.intent.action.PICK;type=vnd.android.cursor.dir/phone_v2;scheme=content;end';
+      return;
+    }
+
+    // 4. iOS / desktop: no browser API or URI scheme can open the native
+    // Contacts app from a webpage here — genuinely not possible outside
+    // Android's intent mechanism, so the honest fallback is manual copy/paste.
+    toast.info(
+      'Device Contacts (தொடர்புகள்)',
+      'This browser can’t open Contacts directly. Copy the number from your Contacts app, then tap "Contacts" here again to paste it in.'
+    );
+  };
+
   const boothLabel = user?.jurisdictions.length
     ? user.jurisdictions.length === 1
       ? `Booth #${user.jurisdictions[0].part_no} (${user.jurisdictions[0].local_body_name_ta})`
@@ -364,6 +458,8 @@ export default function Survey() {
                     values={answers}
                     errors={errors}
                     onChange={setAnswer}
+                    onPickContact={phoneFieldKey ? () => void handlePickContact() : undefined}
+                    pickingContact={pickingContact}
                   />
                 )}
               </div>
