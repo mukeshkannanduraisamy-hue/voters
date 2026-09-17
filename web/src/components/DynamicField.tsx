@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../lib/api';
+import { api, setMutationHandler } from '../lib/api';
 import {
   Alert, Field, Input, PhoneInput, Select, Switch, Textarea,
 } from './ui';
@@ -75,6 +75,13 @@ export function clearOptionCache() {
   optionCache.clear();
   cachedOptionsByMaster.clear();
 }
+
+// Automatically clear the dropdown options cache whenever masters, categories or schemas are mutated
+setMutationHandler((path) => {
+  if (path.includes('/masters') || path.includes('/master-categories') || path.includes('/form-schema')) {
+    clearOptionCache();
+  }
+});
 
 export function useFieldOptions(field: FormField): FieldOption[] {
   const [remote, setRemote] = useState<FieldOption[]>([]);

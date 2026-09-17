@@ -40,6 +40,7 @@ export default function Survey() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
+  const [recordsRefreshKey, setRecordsRefreshKey] = useState(0);
   const formRef = useRef<HTMLDivElement>(null);
   /** `epicId::schemaVersion` already seeded, so a re-render never wipes edits. */
   const seededFor = useRef('');

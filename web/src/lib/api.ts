@@ -24,6 +24,9 @@ export class ApiError extends Error {
 let onUnauthorized: (() => void) | null = null;
 export const setUnauthorizedHandler = (fn: (() => void) | null) => { onUnauthorized = fn; };
 
+let onMutation: ((path: string, method: string) => void) | null = null;
+export const setMutationHandler = (fn: ((path: string, method: string) => void) | null) => { onMutation = fn; };
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
@@ -51,6 +54,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       payload?.fields ?? {},
       Array.isArray(payload?.errors) ? payload.errors : undefined
     );
+  }
+
+  if (method !== 'GET' && onMutation) {
+    try { onMutation(path, method); } catch { /* ignore hook error */ }
   }
   return payload as T;
 }

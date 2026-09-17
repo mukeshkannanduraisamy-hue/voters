@@ -101,6 +101,7 @@ router.delete('/api/admin/backups/:filename', authenticate, requireRole(ROLES.A1
 
 // 5. External cron endpoint (Secured with CRON_SECRET key)
 router.get('/api/internal/backup-cron', async (req, res) => {
+  try {
     if (!CRON_SECRET) {
       return res.status(500).json({ error: 'CRON_SECRET is not configured on the server' });
     }
