@@ -132,6 +132,13 @@ export const OTHER_TEXT_FIELDS: Record<string, string> = {
   other_education_text: 'education_id',
 };
 
+/** Checks if the sector is "Others" (or Tamil equivalent) */
+export function isOthersSector(sector?: string | null): boolean {
+  if (!sector) return false;
+  const s = sector.trim().toLowerCase();
+  return s === 'others' || s === 'other' || s.startsWith('other') || s === 'மற்றவை' || s.startsWith('மற்றவை');
+}
+
 /** Mirror of the server's rule engine — decides whether a field shows. */
 export function isVisible(
   field: FormField,
@@ -153,6 +160,13 @@ export function isVisible(
 
   // A custom-note field with no explicit rule shows only when its paired
   // select resolves to "Other", or if there is already a saved non-empty value.
+  // Exception: for the occupation note, choosing the "Others" sector directly opens
+  // the text box without requiring a separate sub-job selection.
+  const isJobNote = field.key === 'other_job_text' || field.bind === 'other_job_text';
+  if (isJobNote && isOthersSector(String(values['job_sector'] ?? ''))) {
+    return true;
+  }
+
   const baseKey = OTHER_TEXT_FIELDS[field.key];
   if (baseKey) {
     if (values[field.key]) return true;

@@ -11,7 +11,7 @@ router.use(authenticate);
 /**
  * GET /api/reports/export — the filtered result set as an .xlsx workbook.
  */
-router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
+router.get('/export', requireRole(ROLES.A1, ROLES.A2), async (req, res, next) => {
   try {
     const f = await buildFilter(req);
 
@@ -36,10 +36,19 @@ router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
       dynamicColumns.push({ key: `dyn_${row.field_key}`, field: row.field_key, header: `${row.field_key} (retired)` });
     }
 
-    // One pass for the answers keyed by elector, so the row loop stays a stream.
+    // One pass for the answers keyed by elector, scoped to the filtered electors
+    // so it doesn't load the entire database into memory.
     const answersByEpic = new Map();
     if (dynamicColumns.length) {
-      for (const row of await db.prepare('SELECT epic_id, field_key, value FROM vms_survey_answers').all()) {
+      const answersQuery = `
+        SELECT a.epic_id, a.field_key, a.value
+          FROM vms_survey_answers a
+          JOIN voters_master v ON v.epic_id = a.epic_id
+          JOIN polling_parts pp ON pp.part_no = v.part_no
+          LEFT JOIN voter_surveys s ON s.epic_id = v.epic_id
+         WHERE ${f.sql}
+      `;
+      for (const row of await db.prepare(answersQuery).all(...f.params)) {
         if (!answersByEpic.has(row.epic_id)) answersByEpic.set(row.epic_id, {});
         answersByEpic.get(row.epic_id)[row.field_key] = row.value;
       }

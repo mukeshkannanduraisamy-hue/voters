@@ -469,8 +469,8 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
         } catch { seeded[f.key] = raw ? [raw] : []; }
       } else seeded[f.key] = raw;
     }
-    const sectorField = schema.fields.find((f) => f.source?.kind === 'master' && f.source.master === 'job_sector');
-    if (sectorField && s?.jobCategory) seeded[sectorField.key] = s.jobCategory;
+    const sectorField = schema.fields.find((f) => f.key === 'job_sector' || (f.source?.kind === 'master' && f.source.master === 'job_sector'));
+    if (sectorField) seeded[sectorField.key] = s?.jobCategory || 'Others';
     setAnswers(seeded);
   }, [schema, voter.epicId]);
 

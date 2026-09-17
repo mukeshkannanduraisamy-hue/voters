@@ -10,11 +10,13 @@ export interface FieldErrors { [field: string]: string }
 export class ApiError extends Error {
   status: number;
   fields: FieldErrors;
-  constructor(message: string, status: number, fields: FieldErrors = {}) {
+  errors?: string[];
+  constructor(message: string, status: number, fields: FieldErrors = {}, errors?: string[]) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.fields = fields;
+    this.errors = errors;
   }
 }
 
@@ -43,7 +45,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     // An expired or revoked session must sign the user out wherever it surfaces.
     if (res.status === 401 && onUnauthorized) onUnauthorized();
-    throw new ApiError(payload?.error ?? `Request failed (${res.status})`, res.status, payload?.fields ?? {});
+    throw new ApiError(
+      payload?.error ?? `Request failed (${res.status})`,
+      res.status,
+      payload?.fields ?? {},
+      Array.isArray(payload?.errors) ? payload.errors : undefined
+    );
   }
   return payload as T;
 }

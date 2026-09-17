@@ -162,19 +162,23 @@ async function buildFilter(req) {
       where.push(`(
         UPPER(v.epic_id) LIKE ?
         OR v.name_ta LIKE ?
+        OR s.corrected_name_ta LIKE ?
         OR v.relative_name_ta LIKE ?
         OR v.door_no LIKE ?
+        OR s.phone_number LIKE ?
         OR v.voter_sno = ?
       )`);
-      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, Number(search));
+      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, Number(search));
     } else {
       where.push(`(
         UPPER(v.epic_id) LIKE ?
         OR v.name_ta LIKE ?
+        OR s.corrected_name_ta LIKE ?
         OR v.relative_name_ta LIKE ?
         OR v.door_no LIKE ?
+        OR s.phone_number LIKE ?
       )`);
-      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
   }
 
@@ -408,7 +412,7 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
     }
 
     const existing = await db.prepare('SELECT epic_id, surveyed_by FROM voter_surveys WHERE epic_id = ?').get(voter.epic_id);
-    const surveyedBy = existing ? existing.surveyed_by : req.user.id;
+    const surveyedBy = existing?.surveyed_by || req.user.id;
 
     // The survey row and its dynamic answers must land together — withTransaction
     // holds one connection for the whole block, so a failure partway through

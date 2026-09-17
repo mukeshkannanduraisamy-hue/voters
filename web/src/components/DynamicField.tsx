@@ -5,7 +5,7 @@ import {
 } from './ui';
 import { PartyGrid } from './spec-ui';
 import type { AnswerMap, FieldOption, FormField } from '../lib/formSchema';
-import { isMulti, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
+import { isMulti, isOthersSector, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
 
 /* ------------------------------------------------------------------ options */
 /**
@@ -16,9 +16,6 @@ import { isMulti, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
  */
 const optionCache = new Map<string, Promise<FieldOption[]>>();
 const cachedOptionsByMaster = new Map<string, FieldOption[]>();
-
-/** The catch-all sector whose own "Other" sub-job auto-selects itself. */
-const OTHERS_JOB_SECTOR = 'Others / Students / Homemakers';
 
 /** The master each "other text" field's paired select is bound to. */
 const MASTER_BY_BASE_KEY: Record<string, string> = {
@@ -99,15 +96,12 @@ export function useFieldOptions(field: FormField): FieldOption[] {
 /* ------------------------------------------------------------------- field */
 export function DynamicField({
   field, values, errors, onChange, tamilFirst = true,
-  onPickContact, pickingContact = false,
 }: {
   field: FormField;
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
   tamilFirst?: boolean;
-  onPickContact?: () => void;
-  pickingContact?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
   if (field.source?.kind === 'master' && field.source.master && allOptions.length > 0) {
@@ -173,15 +167,17 @@ export function DynamicField({
   // its own "Other" sub-job, so the custom note box appears immediately
   // instead of requiring a second explicit pick. Only fires while the
   // sub-job is genuinely empty on that sector — choosing a real sub-job
-  // (Homemaker, Student, etc.) leaves it alone, and picking any other
-  // sector never triggers this at all.
-  const isJobIdField = field.bind === 'job_id';
+  // When Occupation sector is "Others", auto-select its "Other" sub-job
+  // so the database binding receives a valid job_id, while the sub-job dropdown
+  // is disabled and the text box directly opens.
+  const isJobIdField = field.bind === 'job_id' || field.key === 'job_id';
   useEffect(() => {
-    if (!isJobIdField || parentValue !== OTHERS_JOB_SECTOR || allOptions.length === 0) return;
-    const currentVal = String(values[field.key] ?? '');
-    if (currentVal) return;
-    const otherOpt = allOptions.find((o) => String(o.parent) === parentValue && isOtherInList(String(o.value), allOptions));
-    if (otherOpt) onChange(field.key, otherOpt.value);
+    if (!isJobIdField || !isOthersSector(parentValue) || allOptions.length === 0) return;
+    const otherOpt = allOptions.find((o) => isOthersSector(String(o.parent ?? '')) && isOtherInList(String(o.value), allOptions))
+      || allOptions.find((o) => isOthersSector(String(o.parent ?? '')));
+    if (otherOpt && String(values[field.key] ?? '') !== String(otherOpt.value)) {
+      onChange(field.key, otherOpt.value);
+    }
   }, [isJobIdField, parentValue, allOptions, field.key, values, onChange]);
 
   // A custom-note field (e.g. other_job_text, other_caste_text) stays visible
@@ -208,6 +204,10 @@ export function DynamicField({
     prevPairedRef.current = pairedValue;
     const currentVal = String(values[field.key] ?? '');
     if (!currentVal) return;
+    // Do not clear the custom job note while Occupation sector is "Others"
+    if (field.key === 'other_job_text' && isOthersSector(String(values['job_sector'] ?? ''))) {
+      return;
+    }
     if (!resolveOtherOption(otherTextBaseKey, pairedValue)) onChange(field.key, '');
   }, [otherTextBaseKey, pairedValue, field.key, values, onChange]);
 
@@ -258,8 +258,7 @@ export function DynamicField({
       case 'phone':
         return (
           <PhoneInput value={str} placeholder={placeholder ?? '9840112233'} invalid={!!err}
-            onChange={(v) => onChange(field.key, v)}
-            onPickContact={onPickContact} pickingContact={pickingContact} />
+            onChange={(v) => onChange(field.key, v)} />
         );
 
       case 'date':
@@ -276,13 +275,18 @@ export function DynamicField({
         );
 
       case 'select': {
+        const isJobSubField = field.bind === 'job_id' || field.key === 'job_id';
+        const isSectorOthers = isJobSubField && isOthersSector(parentValue);
+        const isDisabled = isParentMissing || isSectorOthers;
         const placeholderText = isParentMissing
           ? 'Select occupation sector first… / முதலில் தொழில் துறையைத் தேர்ந்தெடுக்கவும்'
+          : isSectorOthers
+          ? 'Others / மற்றவை'
           : (placeholder ?? 'Select…');
         return (
           <Select
             value={str}
-            disabled={isParentMissing}
+            disabled={isDisabled}
             invalid={!!err}
             onChange={(e) => onChange(field.key, e.target.value)}
           >
@@ -292,16 +296,22 @@ export function DynamicField({
         );
       }
 
-      case 'radio':
+      case 'radio': {
+        const isJobSubField = field.bind === 'job_id' || field.key === 'job_id';
+        const isSectorOthers = isJobSubField && isOthersSector(parentValue);
+        const isDisabled = isParentMissing || isSectorOthers;
         return (
           <div className="pill-group" role="radiogroup" aria-label={field.label}>
             {isParentMissing ? (
               <span className="t-sm t-muted">Select occupation sector first… / முதலில் தொழில் துறையைத் தேர்ந்தெடுக்கவும்</span>
+            ) : isSectorOthers ? (
+              <span className="t-sm t-muted">Others / மற்றவை</span>
             ) : (
               options.map((o) => (
                 <button
                   key={o.value} type="button" role="radio" aria-checked={str === o.value}
                   className={`pill ${str === o.value ? 'on' : ''}`}
+                  disabled={isDisabled}
                   // Tapping the chosen pill again clears it, so an optional
                   // question can be un-answered without reloading the form.
                   onClick={() => onChange(field.key, str === o.value ? '' : o.value)}
@@ -312,6 +322,7 @@ export function DynamicField({
             )}
           </div>
         );
+      }
 
       case 'multiselect': {
         const selected = Array.isArray(raw) ? raw.map(String) : [];
@@ -369,14 +380,12 @@ export function DynamicField({
  * row at every section header so cards stay visually grouped.
  */
 export function DynamicFieldGrid({
-  fields, values, errors, onChange, onPickContact, pickingContact = false,
+  fields, values, errors, onChange,
 }: {
   fields: FormField[];
   values: AnswerMap;
   errors: Record<string, string>;
   onChange: (key: string, value: string | string[]) => void;
-  onPickContact?: () => void;
-  pickingContact?: boolean;
 }) {
   return (
     <div className="dyn-grid">
@@ -387,7 +396,6 @@ export function DynamicFieldGrid({
           <div key={f.key} className={`dyn-cell dyn-${span}`}>
             <DynamicField
               field={f} values={values} errors={errors} onChange={onChange}
-              onPickContact={onPickContact} pickingContact={pickingContact}
             />
           </div>
         );

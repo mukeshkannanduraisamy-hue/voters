@@ -323,6 +323,12 @@ export function isVisible(field, values, isOtherOption) {
   }
 }
 
+export function isOthersSector(sector) {
+  if (!sector) return false;
+  const s = String(sector).trim().toLowerCase();
+  return s === 'others' || s === 'other' || s.startsWith('other') || s === 'மற்றவை' || s.startsWith('மற்றவை');
+}
+
 /**
  * Validates a submitted answer map against the published schema.
  *
@@ -364,9 +370,11 @@ export async function validateSubmission(fields, submitted) {
     // A hidden field contributes nothing — and is actively cleared, so a value
     // typed before the parent answer changed can't survive as stale data.
     const otherTextBaseKey = OTHER_TEXT_FIELDS[field.key];
-    const isFieldVisible = otherTextBaseKey
+    const isJobNote = field.key === 'other_job_text' || field.bind === 'other_job_text';
+    const isSectorOthers = isJobNote && isOthersSector(submitted?.job_sector);
+    const isFieldVisible = isSectorOthers || (otherTextBaseKey
       ? (field.visibility ? isVisible(field, values) : (Boolean(submitted?.[field.key]) || await isOtherOptionServer(otherTextBaseKey, submitted?.[otherTextBaseKey])))
-      : isVisible(field, values);
+      : isVisible(field, values));
 
     if (!isFieldVisible) {
       values[field.key] = MULTI_TYPES.has(field.type) ? [] : '';
@@ -461,6 +469,17 @@ export async function validateSubmission(fields, submitted) {
       systemValues[field.bind] = binding.kind === 'masterId' ? Number(value) : value;
     } else if (!field.transient) {
       answers[field.key] = multi ? JSON.stringify(value) : value;
+    }
+  }
+
+  if (isOthersSector(submitted?.job_sector)) {
+    delete errors.job_id;
+    delete codes.job_id;
+    if (!systemValues.job_id) {
+      const otherJobRow = await db.prepare(
+        `SELECT id FROM job_master WHERE (category = 'Others' OR category LIKE 'Other%') AND (name = 'Other' OR name_ta = 'மற்றவை') AND is_active = 1 LIMIT 1`
+      ).get();
+      if (otherJobRow) systemValues.job_id = otherJobRow.id;
     }
   }
 

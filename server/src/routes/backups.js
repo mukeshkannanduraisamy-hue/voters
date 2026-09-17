@@ -1,11 +1,12 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { authenticate, requireRole, ROLES } from '../lib/auth.js';
 import { createDatabaseBackup, listBackups, deleteBackup, getNextBackupInfo, ensureBackupsDir } from '../lib/backup.js';
 
 const router = express.Router();
-const CRON_SECRET = process.env.CRON_SECRET || 'vms-cron-secret-2026';
+const CRON_SECRET = process.env.CRON_SECRET;
 
 // 1. List all available backup snapshots (A1 Super Admin only)
 router.get('/api/admin/backups', authenticate, requireRole(ROLES.A1), (req, res) => {
@@ -100,9 +101,14 @@ router.delete('/api/admin/backups/:filename', authenticate, requireRole(ROLES.A1
 
 // 5. External cron endpoint (Secured with CRON_SECRET key)
 router.get('/api/internal/backup-cron', async (req, res) => {
-  try {
-    const key = req.query.key || req.headers['x-cron-key'];
-    if (key !== CRON_SECRET) {
+    if (!CRON_SECRET) {
+      return res.status(500).json({ error: 'CRON_SECRET is not configured on the server' });
+    }
+
+    const key = String(req.query.key || req.headers['x-cron-key'] || '');
+    const keyBuf = Buffer.from(key);
+    const secretBuf = Buffer.from(CRON_SECRET);
+    if (keyBuf.length !== secretBuf.length || !crypto.timingSafeEqual(keyBuf, secretBuf)) {
       return res.status(401).json({ error: 'Unauthorized cron key' });
     }
 

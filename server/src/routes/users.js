@@ -1,5 +1,5 @@
 import express from 'express';
-import { db, uuid } from '../lib/db.js';
+import { db, uuid, withTransaction } from '../lib/db.js';
 import {
   authenticate, requireRole, hashPassword, audit, ROLES, ROLE_LABELS, ROLE_LABELS_TA, ONLINE_WINDOW_MS,
 } from '../lib/auth.js';
@@ -195,15 +195,17 @@ router.post('/create', requireRole(ROLES.A1, ROLES.A2), async (req, res, next) =
     }
 
     const id = uuid();
-    await db.prepare(
-      `INSERT INTO users (id, mobile_number, password_hash, role, epic_id, full_name, is_active, created_by)
-       VALUES (?,?,?,?,?,?,?,?)`
-    ).run(id, mobile, hashPassword(password), role, epic, fullName ?? voterName, isActive, req.user.id);
+    await withTransaction(async (trx) => {
+      await trx.prepare(
+        `INSERT INTO users (id, mobile_number, password_hash, role, epic_id, full_name, is_active, created_by)
+         VALUES (?,?,?,?,?,?,?,?)`
+      ).run(id, mobile, hashPassword(password), role, epic, fullName ?? voterName, isActive, req.user.id);
 
-    const ins = db.prepare('INSERT INTO user_jurisdictions (user_id, part_no) VALUES (?,?) ON CONFLICT DO NOTHING');
-    for (const p of partNos) {
-      await ins.run(id, p);
-    }
+      const ins = trx.prepare('INSERT INTO user_jurisdictions (user_id, part_no) VALUES (?,?) ON CONFLICT DO NOTHING');
+      for (const p of partNos) {
+        await ins.run(id, p);
+      }
+    });
 
     invalidateDashboardCache();
     audit(req.user.id, 'USER_CREATED', 'user', id, `${role} ${mobile} with ${partNos.length} booths`);
@@ -285,14 +287,18 @@ router.patch('/:id', requireRole(ROLES.A1, ROLES.A2), async (req, res, next) => 
     if (Object.keys(fields).length) return res.status(400).json({ error: 'Please correct the highlighted fields', fields });
     if (!sets.length && partNos === null) return res.status(400).json({ error: 'Nothing to update' });
 
-    if (sets.length) await db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...params, target.id);
-    if (partNos) {
-      await db.prepare('DELETE FROM user_jurisdictions WHERE user_id = ?').run(target.id);
-      const ins = db.prepare('INSERT INTO user_jurisdictions (user_id, part_no) VALUES (?,?) ON CONFLICT DO NOTHING');
-      for (const p of partNos) {
-        await ins.run(target.id, p);
+    await withTransaction(async (trx) => {
+      if (sets.length) {
+        await trx.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...params, target.id);
       }
-    }
+      if (partNos) {
+        await trx.prepare('DELETE FROM user_jurisdictions WHERE user_id = ?').run(target.id);
+        const ins = trx.prepare('INSERT INTO user_jurisdictions (user_id, part_no) VALUES (?,?) ON CONFLICT DO NOTHING');
+        for (const p of partNos) {
+          await ins.run(target.id, p);
+        }
+      }
+    });
 
     invalidateDashboardCache();
     audit(req.user.id, 'USER_UPDATED', 'user', target.id, Object.keys(b).join(','));

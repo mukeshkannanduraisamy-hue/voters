@@ -27,6 +27,7 @@ export const pool = mysql.createPool({
   keepAliveInitialDelay: 10000,
   dateStrings: true,
   multipleStatements: true,
+  timezone: '+05:30',
   ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
 });
 

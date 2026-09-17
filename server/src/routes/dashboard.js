@@ -162,7 +162,7 @@ router.get('/agents', requireRole(ROLES.A1, ROLES.A2), async (req, res, next) =>
         `SELECT u.id, u.full_name, u.mobile_number, u.is_active, u.last_login_at,
                 (SELECT COUNT(*) FROM voter_surveys s WHERE s.surveyed_by = u.id) AS surveysDone,
                 (SELECT COUNT(*) FROM voter_surveys s WHERE s.surveyed_by = u.id
-                   AND DATE(s.updated_at) = CURDATE()) AS todayDone,
+                   AND DATE(s.surveyed_at) = CURDATE()) AS todayDone,
                 (SELECT COUNT(*) FROM voters_master v WHERE v.is_deleted = 0 AND v.part_no IN
                    (SELECT part_no FROM user_jurisdictions WHERE user_id = u.id)) AS assignedVoters,
                 (SELECT GROUP_CONCAT(part_no ORDER BY part_no) FROM user_jurisdictions WHERE user_id = u.id) AS partList,
