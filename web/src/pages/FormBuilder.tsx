@@ -112,7 +112,8 @@ export default function FormBuilder() {
     let copyKey = `${src.key}_copy`;
     let n = 2;
     while (keys.has(copyKey)) copyKey = `${src.key}_copy_${n++}`;
-    const copy = { ...src, key: copyKey, label: `${src.label} (copy)`, bind: null };
+    const cloned = structuredClone(src);
+    const copy = { ...cloned, key: copyKey, label: `${src.label} (copy)`, bind: null };
     const idx = (fields ?? []).findIndex((f) => f.key === key);
     const next = [...(fields ?? [])];
     next.splice(idx + 1, 0, copy);

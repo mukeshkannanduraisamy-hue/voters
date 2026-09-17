@@ -105,8 +105,10 @@ export default function Analytics() {
           ) : (
             <div className="stack tight">
               {(() => {
-                const max = Math.max(...breakdown.parties.map((x) => x.count));
-                const total = breakdown.parties.reduce((a, x) => a + x.count, 0);
+                const rawMax = Math.max(...breakdown.parties.map((x) => x.count));
+                const rawTotal = breakdown.parties.reduce((a, x) => a + x.count, 0);
+                const max = rawMax > 0 ? rawMax : 1;
+                const total = rawTotal > 0 ? rawTotal : 1;
                 return breakdown.parties.map((p) => (
                   <div key={p.code} className="hbar-row">
                     <div className="row tight" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
@@ -117,11 +119,11 @@ export default function Analytics() {
                       </div>
                     </div>
                     <div className="hbar-track">
-                      <div className="hbar-fill" style={{ width: `${(p.count / max) * 100}%`, background: p.color }} />
+                      <div className="hbar-fill" style={{ width: rawMax > 0 ? `${(p.count / max) * 100}%` : '0%', background: p.color }} />
                     </div>
                     <div className="hbar-val">
                       {fmt(p.count)}
-                      <span className="t-subtle t-xs"> · {Math.round((p.count / total) * 100)}%</span>
+                      <span className="t-subtle t-xs"> · {rawTotal > 0 ? Math.round((p.count / total) * 100) : 0}%</span>
                     </div>
                   </div>
                 ));

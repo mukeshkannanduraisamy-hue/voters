@@ -27,7 +27,7 @@ type QuickFilter = 'all' | 'mine' | 'pending';
  * `?epic=` query param for its own deep-link — both components replacing the
  * full query string would fight over it.
  */
-export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
+export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?: boolean; refreshTrigger?: number | string }) {
   const { user } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -87,7 +87,7 @@ export function VoterRecordsPanel({ syncUrl = true }: { syncUrl?: boolean }) {
     const t = setTimeout(() => void load(), search ? 320 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [filters, refreshTrigger]);
 
   useEffect(() => { setPage(1); }, [search, localBody, partNo, gender, quickFilter, limit]);
 
