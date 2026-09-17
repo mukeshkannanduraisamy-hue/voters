@@ -394,7 +394,7 @@ export default function Survey() {
       <div className="section-tag mt-6 mb-3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Icon name="list" size={16} />My Voter Records
       </div>
-      <VoterRecordsPanel syncUrl={false} />
+      <VoterRecordsPanel syncUrl={false} refreshTrigger={recordsRefreshKey} />
 
       {/* -------------------- saved confirmation popup -------------------- */}
       <Modal

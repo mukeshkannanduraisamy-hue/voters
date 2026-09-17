@@ -5,7 +5,7 @@ import { useAuth, scopedPath } from '../lib/auth';
 import type { AgentProgress, DashboardStats, RecentSurvey } from '../lib/types';
 import {
   Alert, Button, Card, CardHead, Empty, Input, PageHead, Progress, ProgressRow, Ring,
-  Skeleton, Stat, TableSkeleton, TrendBars, fmt, fmtRelative, initials,
+  Skeleton, Stat, TableSkeleton, TrendBars, fmt, fmtRelative, initials, useToast,
 } from '../components/ui';
 import { LocalBodyBadge, PartyChip } from '../components/spec-ui';
 import { Icon } from '../components/icons';
@@ -13,6 +13,7 @@ import { Icon } from '../components/icons';
 export default function Dashboard() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const toast = useToast();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [agents, setAgents] = useState<AgentProgress[] | null>(null);
@@ -50,8 +51,11 @@ export default function Dashboard() {
     setExporting(true);
     try {
       await api.download('/api/reports/export', 'vms-survey-report.xlsx');
-    } catch { /* the button returns to idle; the download simply did not start */ }
-    finally { setExporting(false); }
+    } catch (err) {
+      toast.bad('Export failed', err instanceof Error ? err.message : 'Could not generate report');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const title = user?.role === 'A2_SUPERVISOR' ? 'Zone Supervisor Dashboard' : 'Global Constituency Dashboard';
