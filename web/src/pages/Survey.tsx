@@ -47,6 +47,7 @@ export default function Survey() {
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
   const [pickingContact, setPickingContact] = useState(false);
+  const [recordsRefreshKey, setRecordsRefreshKey] = useState(0);
   const formRef = useRef<HTMLDivElement>(null);
   /** `epicId::schemaVersion` already seeded, so a re-render never wipes edits. */
   const seededFor = useRef('');
@@ -204,6 +205,7 @@ export default function Survey() {
       // screen — the agent's next action is almost always the next voter, so
       // land them back at the start rather than leaving the completed form up.
       setSavedName(res.voter.survey?.correctedNameTa ?? voter.nameTa);
+      setRecordsRefreshKey((k) => k + 1);
       api.get<DashboardStats>('/api/dashboard/stats').then(setStats).catch(() => {});
     } catch (err) {
       if (err instanceof ApiError) { setErrors(err.fields); setSaveError(err.message); }
