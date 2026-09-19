@@ -73,6 +73,112 @@ export function PartyGrid({ parties, value, onChange }: {
   );
 }
 
+/**
+ * Collapsible political-leaning selector: does not expose party options openly
+ * by default. Renders a trigger displaying the current selection (or placeholder),
+ * and reveals the full party grid only when clicked to open.
+ */
+export function CollapsiblePartyPicker({ parties, value, onChange }: {
+  parties: PartyOption[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selected = parties.find((p) => p.id === value);
+
+  return (
+    <div className={`party-picker ${isOpen ? 'open' : ''}`}>
+      <div
+        className={`party-picker-trigger ${selected ? 'has-value' : ''}`}
+        style={selected ? ({ ['--party-color' as string]: selected.color_code } as React.CSSProperties) : undefined}
+        onClick={() => setIsOpen((prev) => !prev)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        aria-label="Political leaning selector"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen((prev) => !prev);
+          }
+        }}
+      >
+        <div className="party-picker-info">
+          {selected ? (
+            <>
+              <PartySymbol party={selected} size={28} />
+              <div className="party-picker-text">
+                <span className="party-picker-code">{selected.party_code}</span>
+                {selected.name_ta && (
+                  <span className="party-picker-name ta">{selected.name_ta}</span>
+                )}
+                <span className="party-picker-badge">Selected / தேர்வு</span>
+              </div>
+            </>
+          ) : (
+            <div className="party-picker-placeholder">
+              <span className="party-picker-icon">
+                <Icon name="flag" size={16} />
+              </span>
+              <span>Select political leaning… / அரசியல் சாய்வைத் தேர்ந்தெடுக்கவும்</span>
+            </div>
+          )}
+        </div>
+
+        <div className="party-picker-actions">
+          {selected && (
+            <button
+              type="button"
+              className="party-picker-clear"
+              title="Clear selection / தேர்வை நீக்கு"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(null);
+              }}
+            >
+              <Icon name="x" size={14} />
+            </button>
+          )}
+          <span className="party-picker-btn">
+            {isOpen ? 'Close / மூடு' : selected ? 'Change / மாற்று' : 'Choose / தேர்வு'}
+            <Icon name="chevron-down" size={14} className={isOpen ? 'rotate-180' : ''} />
+          </span>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="party-picker-panel">
+          <div className="party-picker-panel-head">
+            <span className="t-xs t-muted">
+              Tap a party to select / தேர்ந்தெடுக்க கட்சியைத் தொடவும்:
+            </span>
+            {value !== null && (
+              <button
+                type="button"
+                className="btn-link t-xs"
+                onClick={() => {
+                  onChange(null);
+                  setIsOpen(false);
+                }}
+              >
+                Clear / நீக்கு
+              </button>
+            )}
+          </div>
+          <PartyGrid
+            parties={parties}
+            value={value}
+            onChange={(id) => {
+              onChange(id);
+              setIsOpen(false);
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Renders the stored Base64 emblem, or a coloured initial when none is set. */
 export function PartySymbol({ party, size = 32 }: {
   party: { name: string; party_code: string; color_code: string; symbol_img: string | null };

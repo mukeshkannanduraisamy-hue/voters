@@ -200,6 +200,159 @@
 }
 .party-chip img { width: 18px; height: 18px; border-radius: var(--r-full); object-fit: contain; background: #fff; }
 
+/* ------------------------ collapsible party picker ----------------------- */
+.party-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+}
+
+.party-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--dur) var(--ease);
+}
+
+.party-picker-trigger:hover {
+  border-color: var(--brand-500);
+  background: var(--surface-2, var(--surface));
+}
+
+.party-picker.open .party-picker-trigger {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-500) 18%, transparent);
+}
+
+.party-picker-trigger.has-value {
+  border-color: color-mix(in srgb, var(--party-color, var(--brand-500)) 55%, var(--border-strong));
+  background: color-mix(in srgb, var(--party-color, var(--brand-500)) 5%, var(--surface));
+}
+
+.party-picker-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.party-picker-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.party-picker-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-500);
+}
+
+.party-picker-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.party-picker-code {
+  font-weight: 750;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.02em;
+  color: var(--party-color, var(--text));
+}
+
+.party-picker-name {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.party-picker-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--party-color, var(--brand-500)) 15%, transparent);
+  color: var(--party-color, var(--brand-600));
+}
+
+.party-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.party-picker-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-full);
+  border: none;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+
+.party-picker-clear:hover {
+  background: var(--bad-100);
+  color: var(--bad-600);
+}
+
+.party-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--brand-600);
+  background: color-mix(in srgb, var(--brand-500) 10%, transparent);
+  padding: 5px 11px;
+  border-radius: var(--r-md);
+  transition: all var(--dur) var(--ease);
+}
+
+.party-picker-btn:hover {
+  background: color-mix(in srgb, var(--brand-500) 18%, transparent);
+}
+
+.party-picker-btn .rotate-180 {
+  transform: rotate(180deg);
+}
+
+.party-picker-panel {
+  padding: var(--sp-3);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  box-shadow: var(--sh-sm);
+}
+
+.party-picker-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 2px;
+}
+
 /* --------------------------- job sector tree ----------------------------- */
 .sector-card {
   border: 1px solid var(--border);

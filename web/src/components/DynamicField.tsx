@@ -3,7 +3,7 @@ import { api, setMutationHandler } from '../lib/api';
 import {
   Alert, Field, Input, PhoneInput, Select, Switch, Textarea,
 } from './ui';
-import { PartyGrid } from './spec-ui';
+import { CollapsiblePartyPicker, PartyGrid } from './spec-ui';
 import type { AnswerMap, FieldOption, FormField } from '../lib/formSchema';
 import { isMulti, isOthersSector, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
 
@@ -358,7 +358,7 @@ export function DynamicField({
 
       case 'party':
         return options.length ? (
-          <PartyGrid
+          <CollapsiblePartyPicker
             parties={options.map((o) => ({
               id: Number(o.value), name: o.label, name_ta: o.labelTa ?? null,
               party_code: o.code ?? o.label.slice(0, 4).toUpperCase(),
