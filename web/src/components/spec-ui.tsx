@@ -45,10 +45,7 @@ export interface PartyOption {
 export function PartyGrid({ parties, value, onChange }: {
   parties: PartyOption[];
   value: number | null;
-  // Clicking the already-selected party deselects it (see onClick below), so
-  // this must accept null — the previous `(id: number) => void` signature hid
-  // that from every call site's type checking (vite's dev/build pipeline only
-  // strips types with esbuild and never runs tsc, so this went uncaught).
+  // Allows unsetting by passing null so tapping a selected tile clears it.
   onChange: (id: number | null) => void;
 }) {
   return (
@@ -62,11 +59,11 @@ export function PartyGrid({ parties, value, onChange }: {
           className={`party-card ${value === p.id ? 'on' : ''}`}
           style={{ ['--party-color' as string]: p.color_code }}
           onClick={() => onChange(value === p.id ? null : p.id)}
-          title={p.name_ta ?? p.name}
+          title={p.name}
         >
           <PartySymbol party={p} size={44} />
           <span className="party-code">{p.party_code}</span>
-          {p.name_ta && <span className="party-name-ta ta">{p.name_ta}</span>}
+          <span className="party-name-en">{p.name}</span>
         </button>
       ))}
     </div>
@@ -75,8 +72,8 @@ export function PartyGrid({ parties, value, onChange }: {
 
 /**
  * Collapsible political-leaning selector: does not expose party options openly
- * by default. Renders a trigger displaying the current selection (or placeholder),
- * and reveals the full party grid only when clicked to open.
+ * by default. Renders a neutral placeholder trigger that does not reveal the selected
+ * party, and reveals the party grid only when clicked to open.
  */
 export function CollapsiblePartyPicker({ parties, value, onChange }: {
   parties: PartyOption[];
@@ -84,13 +81,11 @@ export function CollapsiblePartyPicker({ parties, value, onChange }: {
   onChange: (id: number | null) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const selected = parties.find((p) => p.id === value);
 
   return (
     <div className={`party-picker ${isOpen ? 'open' : ''}`}>
       <div
-        className={`party-picker-trigger ${selected ? 'has-value' : ''}`}
-        style={selected ? ({ ['--party-color' as string]: selected.color_code } as React.CSSProperties) : undefined}
+        className="party-picker-trigger"
         onClick={() => setIsOpen((prev) => !prev)}
         role="button"
         tabIndex={0}
@@ -104,43 +99,17 @@ export function CollapsiblePartyPicker({ parties, value, onChange }: {
         }}
       >
         <div className="party-picker-info">
-          {selected ? (
-            <>
-              <PartySymbol party={selected} size={28} />
-              <div className="party-picker-text">
-                <span className="party-picker-code">{selected.party_code}</span>
-                {selected.name_ta && (
-                  <span className="party-picker-name ta">{selected.name_ta}</span>
-                )}
-                <span className="party-picker-badge">Selected / தேர்வு</span>
-              </div>
-            </>
-          ) : (
-            <div className="party-picker-placeholder">
-              <span className="party-picker-icon">
-                <Icon name="flag" size={16} />
-              </span>
-              <span>Select political leaning… / அரசியல் சாய்வைத் தேர்ந்தெடுக்கவும்</span>
-            </div>
-          )}
+          <div className="party-picker-placeholder">
+            <span className="party-picker-icon">
+              <Icon name="flag" size={16} />
+            </span>
+            <span>Select political leaning…</span>
+          </div>
         </div>
 
         <div className="party-picker-actions">
-          {selected && (
-            <button
-              type="button"
-              className="party-picker-clear"
-              title="Clear selection / தேர்வை நீக்கு"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(null);
-              }}
-            >
-              <Icon name="x" size={14} />
-            </button>
-          )}
           <span className="party-picker-btn">
-            {isOpen ? 'Close / மூடு' : selected ? 'Change / மாற்று' : 'Choose / தேர்வு'}
+            {isOpen ? 'Close' : 'Choose'}
             <Icon name="chevron-down" size={14} className={isOpen ? 'rotate-180' : ''} />
           </span>
         </div>
@@ -150,7 +119,7 @@ export function CollapsiblePartyPicker({ parties, value, onChange }: {
         <div className="party-picker-panel">
           <div className="party-picker-panel-head">
             <span className="t-xs t-muted">
-              Tap a party to select / தேர்ந்தெடுக்க கட்சியைத் தொடவும்:
+              Tap a party to select:
             </span>
             {value !== null && (
               <button
@@ -161,7 +130,7 @@ export function CollapsiblePartyPicker({ parties, value, onChange }: {
                   setIsOpen(false);
                 }}
               >
-                Clear / நீக்கு
+                Clear
               </button>
             )}
           </div>

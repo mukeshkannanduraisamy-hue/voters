@@ -224,13 +224,12 @@ export function DynamicField({
   if (field.active === false) return null;
   if (!isVisible(field, values, resolveOtherOption)) return null;
 
-  const isEducation = field.bind === 'education_id' || field.source?.master === 'education';
   const err = errors[field.key];
   const raw = values[field.key];
-  const label = !isEducation && tamilFirst && field.labelTa ? `${field.label} / ${field.labelTa}` : field.label;
-  const hint = !isEducation && tamilFirst && field.hintTa ? `${field.hint ?? ''} ${field.hintTa}`.trim() : field.hint ?? undefined;
-  const placeholder = field.placeholder ?? field.placeholderTa ?? undefined;
-  const optLabel = (o: FieldOption) => (!isEducation && o.labelTa ? `${o.labelTa} (${o.label})` : o.label);
+  const label = field.label;
+  const hint = field.hint ?? undefined;
+  const placeholder = field.placeholder ?? undefined;
+  const optLabel = (o: FieldOption) => o.label;
 
   /* ---- layout-only elements ---- */
   if (field.type === 'section') {
@@ -306,7 +305,7 @@ export function DynamicField({
       case 'boolean':
         return (
           <Switch checked={str === 'true'} onChange={(c) => onChange(field.key, c ? 'true' : 'false')}
-            label={str === 'true' ? 'Yes / ஆம்' : 'No / இல்லை'} />
+            label={str === 'true' ? 'Yes' : 'No'} />
         );
 
       case 'select': {
@@ -314,9 +313,9 @@ export function DynamicField({
         const isSectorOthers = isJobSubField && isOthersSector(parentValue);
         const isDisabled = isParentMissing || isSectorOthers;
         const placeholderText = isParentMissing
-          ? 'Select occupation sector first… / முதலில் தொழில் துறையைத் தேர்ந்தெடுக்கவும்'
+          ? 'Select occupation sector first…'
           : isSectorOthers
-          ? 'Others / மற்றவை'
+          ? 'Others'
           : (placeholder ?? 'Select…');
         return (
           <Select
@@ -336,24 +335,31 @@ export function DynamicField({
         const isSectorOthers = isJobSubField && isOthersSector(parentValue);
         const isDisabled = isParentMissing || isSectorOthers;
         return (
-          <div className="pill-group" role="radiogroup" aria-label={field.label}>
+          <div className="radio-group" role="radiogroup" aria-label={field.label}>
             {isParentMissing ? (
-              <span className="t-sm t-muted">Select occupation sector first… / முதலில் தொழில் துறையைத் தேர்ந்தெடுக்கவும்</span>
+              <span className="t-sm t-muted">Select occupation sector first…</span>
             ) : isSectorOthers ? (
-              <span className="t-sm t-muted">Others / மற்றவை</span>
+              <span className="t-sm t-muted">Others</span>
             ) : (
-              options.map((o) => (
-                <button
-                  key={o.value} type="button" role="radio" aria-checked={str === o.value}
-                  className={`pill ${str === o.value ? 'on' : ''}`}
-                  disabled={isDisabled}
-                  // Tapping the chosen pill again clears it, so an optional
-                  // question can be un-answered without reloading the form.
-                  onClick={() => onChange(field.key, str === o.value ? '' : o.value)}
-                >
-                  {optLabel(o)}
-                </button>
-              ))
+              options.map((o) => {
+                const on = str === o.value;
+                return (
+                  <label key={o.value} className={`radio-opt ${on ? 'on' : ''}`}>
+                    <input
+                      type="radio"
+                      name={field.key}
+                      value={o.value}
+                      checked={on}
+                      disabled={isDisabled}
+                      onChange={() => onChange(field.key, on ? '' : o.value)}
+                      onClick={() => {
+                        if (on) onChange(field.key, '');
+                      }}
+                    />
+                    <span>{optLabel(o)}</span>
+                  </label>
+                );
+              })
             )}
           </div>
         );

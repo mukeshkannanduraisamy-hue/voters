@@ -339,14 +339,14 @@ export default function Survey() {
                     <Input
                       className="ta" value={corrections.correctedNameTa}
                       onChange={(e) => setCorrection('correctedNameTa', e.target.value)}
-                      placeholder="வாக்காளர் பெயர்"
+                      placeholder="Voter name (Tamil)"
                     />
                   </Field>
-                  <Field label={`Corrected relative name (${voter.relationTypeTa ?? 'father / husband'})`} error={errors.correctedRelativeNameTa}>
+                  <Field label={`Corrected relative name (${voter.relationTypeTa ? 'relative' : 'father / husband'})`} error={errors.correctedRelativeNameTa}>
                     <Input
                       className="ta" value={corrections.correctedRelativeNameTa}
                       onChange={(e) => setCorrection('correctedRelativeNameTa', e.target.value)}
-                      placeholder="உறவினர் பெயர்"
+                      placeholder="Relative name (Tamil)"
                     />
                   </Field>
                 </div>

@@ -971,6 +971,17 @@
 .pill:hover { border-color: var(--brand-400, var(--brand-500)); }
 .pill.on { background: var(--brand-500); border-color: var(--brand-500); color: #fff; }
 
+.radio-group { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.radio-opt {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px;
+  border-radius: var(--r-md); border: 1px solid var(--border-strong);
+  background: var(--surface); cursor: pointer; font-size: var(--fs-base);
+  font-weight: 550; user-select: none; transition: all 120ms var(--ease);
+}
+.radio-opt:hover { border-color: var(--brand-500); }
+.radio-opt.on { border-color: var(--brand-500); background: var(--brand-50); color: var(--brand-700); }
+.radio-opt input { accent-color: var(--brand-500); cursor: pointer; width: 16px; height: 16px; }
+
 /* ---- multi-select checkboxes ---- */
 .check-group { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .check-opt {

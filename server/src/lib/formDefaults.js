@@ -70,9 +70,20 @@ export const DEFAULT_FIELDS = [
     source: { kind: 'master', master: 'job', parentField: 'job_sector' },
   },
   {
+    key: 'job_type', type: 'radio', bind: null, width: 'full', active: true, required: false,
+    label: 'Job type',
+    source: {
+      kind: 'static',
+      options: [
+        { value: 'Govt Job', label: 'Govt Job' },
+        { value: 'Private Job', label: 'Private Job' },
+      ],
+    },
+  },
+  {
     key: 'other_job_text', type: 'text', bind: 'other_job_text', width: 'full', active: true, required: false,
     label: 'Custom job note', labelTa: 'தனிப்பயன் வேலை குறிப்பு',
-    placeholder: 'e.g. பட்டுப்புழு வளர்ப்பு',
+    placeholder: 'e.g. Silk rearing',
   },
   {
     key: 'party_id', type: 'party', bind: 'party_id', width: 'full', active: true, required: false,
