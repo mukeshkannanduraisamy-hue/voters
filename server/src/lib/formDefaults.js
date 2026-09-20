@@ -59,17 +59,6 @@ export const DEFAULT_FIELDS = [
     source: { kind: 'master', master: 'education' },
   },
   {
-    key: 'job_sector', type: 'select', bind: null, width: 'half', active: true, required: false,
-    label: 'Occupation sector', labelTa: 'தொழில் துறை',
-    source: { kind: 'master', master: 'job_sector' },
-    transient: true, // a filter for job_id below; not stored as an answer
-  },
-  {
-    key: 'job_id', type: 'select', bind: 'job_id', width: 'half', active: true, required: false,
-    label: 'Specific sub-job', labelTa: 'குறிப்பிட்ட வேலை',
-    source: { kind: 'master', master: 'job', parentField: 'job_sector' },
-  },
-  {
     key: 'job_type', type: 'radio', bind: null, width: 'full', active: true, required: false,
     label: 'Job type',
     source: {
@@ -79,6 +68,17 @@ export const DEFAULT_FIELDS = [
         { value: 'Private Job', label: 'Private Job' },
       ],
     },
+  },
+  {
+    key: 'job_sector', type: 'select', bind: null, width: 'half', active: true, required: false,
+    label: 'Occupation sector', labelTa: 'தொழில் துறை',
+    source: { kind: 'master', master: 'job_sector' },
+    transient: true, // a filter for job_id below; not stored as an answer
+  },
+  {
+    key: 'job_id', type: 'select', bind: 'job_id', width: 'half', active: true, required: false,
+    label: 'Specific sub-job', labelTa: 'குறிப்பிட்ட வேலை',
+    source: { kind: 'master', master: 'job', parentField: 'job_sector' },
   },
   {
     key: 'other_job_text', type: 'text', bind: 'other_job_text', width: 'full', active: true, required: false,
