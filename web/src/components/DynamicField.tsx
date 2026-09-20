@@ -4,7 +4,6 @@ import {
   Alert, Field, Input, PhoneInput, Select, Switch, Textarea,
 } from './ui';
 import { CollapsiblePartyPicker, PartyGrid } from './spec-ui';
-import { ContactImportModal } from './ContactImportModal';
 import type { AnswerMap, FieldOption, FormField } from '../lib/formSchema';
 import { isMulti, isOthersSector, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
 
@@ -115,7 +114,6 @@ export function DynamicField({
   pickingContact?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
-  const [importModalOpen, setImportModalOpen] = useState(false);
   if (field.source?.kind === 'master' && field.source.master && allOptions.length > 0) {
     cachedOptionsByMaster.set(field.source.master, allOptions);
   }
@@ -267,29 +265,36 @@ export function DynamicField({
             onChange={(e) => onChange(field.key, e.target.value)} />
         );
 
-      case 'phone':
+      case 'phone': {
+        const nativeContactsSupported = typeof navigator !== 'undefined' && 'contacts' in navigator;
+        const pickContact = onPickContact ?? (nativeContactsSupported ? async () => {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const contacts = await (navigator as any).contacts.select(['tel'], { multiple: false });
+            if (!contacts?.length) return;
+            const rawTels: string[] = contacts[0]?.tel ?? [];
+            const digits = rawTels
+              .map((t: string) => t.replace(/\D/g, ''))
+              .map((t: string) => {
+                if (t.startsWith('91') && t.length === 12) return t.slice(2);
+                if (t.startsWith('0') && t.length === 11) return t.slice(1);
+                return t;
+              })
+              .find((t: string) => /^[6-9]\d{9}$/.test(t));
+            if (digits) onChange(field.key, digits);
+          } catch { /* cancelled or unavailable */ }
+        } : undefined);
         return (
-          <>
-            <PhoneInput
-              value={str}
-              placeholder={placeholder ?? '9840112233'}
-              invalid={!!err}
-              onChange={(v) => onChange(field.key, v)}
-              onPickContact={onPickContact ?? (() => setImportModalOpen(true))}
-              pickingContact={pickingContact}
-            />
-            {importModalOpen && (
-              <ContactImportModal
-                open={importModalOpen}
-                onClose={() => setImportModalOpen(false)}
-                onSelect={(digits) => {
-                  onChange(field.key, digits);
-                  setImportModalOpen(false);
-                }}
-              />
-            )}
-          </>
+          <PhoneInput
+            value={str}
+            placeholder={placeholder ?? '9840112233'}
+            invalid={!!err}
+            onChange={(v) => onChange(field.key, v)}
+            onPickContact={pickContact}
+            pickingContact={pickingContact}
+          />
         );
+      }
 
       case 'date':
         return (

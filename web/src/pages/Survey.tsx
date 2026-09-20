@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -9,7 +9,7 @@ import {
 } from '../components/ui';
 import { VoterRecordsPanel } from '../components/VoterRecordsPanel';
 import { DynamicFieldGrid, resolveOtherOption, fetchMasterOptions } from '../components/DynamicField';
-import { ContactImportModal } from '../components/ContactImportModal';
+
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -47,7 +47,6 @@ export default function Survey() {
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
-  const [pickingContact, setPickingContact] = useState(false);
   const [recordsRefreshKey, setRecordsRefreshKey] = useState(0);
   const formRef = useRef<HTMLDivElement>(null);
   /** `epicId::schemaVersion` already seeded, so a re-render never wipes edits. */
@@ -228,19 +227,6 @@ export default function Survey() {
     clearAll(); // "redirect to main page" — back to the search landing state
   };
 
-  /** The first phone field in the schema, so Contacts import targets the right key. */
-  const phoneFieldKey = useMemo(
-    () => schema?.fields.find((f) => f.type === 'phone' && f.active !== false)?.key ?? null,
-    [schema]
-  );
-
-  const [contactModalOpen, setContactModalOpen] = useState(false);
-
-  /** Opens Contact Import dialog (supporting Device Contacts, Clipboard paste, Quick text, and .vcf file) */
-  const handlePickContact = () => {
-    setContactModalOpen(true);
-  };
-
   const boothLabel = user?.jurisdictions.length
     ? user.jurisdictions.length === 1
       ? `Booth #${user.jurisdictions[0].part_no} (${user.jurisdictions[0].local_body_name_ta})`
@@ -386,8 +372,6 @@ export default function Survey() {
                     values={answers}
                     errors={errors}
                     onChange={setAnswer}
-                    onPickContact={phoneFieldKey ? () => void handlePickContact() : undefined}
-                    pickingContact={pickingContact}
                   />
                 )}
               </div>
@@ -435,16 +419,6 @@ export default function Survey() {
         </div>
       </Modal>
 
-      {/* -------------------- contact import popup -------------------- */}
-      {contactModalOpen && (
-        <ContactImportModal
-          open={contactModalOpen}
-          onClose={() => setContactModalOpen(false)}
-          onSelect={(digits) => {
-            if (phoneFieldKey) setAnswer(phoneFieldKey, digits);
-          }}
-        />
-      )}
     </div>
   );
 }
