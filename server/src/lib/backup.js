@@ -206,31 +206,55 @@ export async function createDatabaseBackup(options = {}) {
 
         await write(`-- Dumping data for table \`${table}\`\n`);
         
-        const stream = conn.connection.query(`SELECT * FROM \`${table}\``).stream();
-        let batch = [];
-        let cols = null;
-        let rowCount = 0;
+        const [countRows] = await conn.query(`SELECT COUNT(*) as c FROM \`${table}\``);
+        const totalRows = Number(countRows[0]?.c || 0);
 
-        for await (const row of stream) {
-          if (!cols) cols = Object.keys(row);
-          batch.push(row);
-          rowCount++;
-          totalDumpedRows++;
+        if (totalRows > 10000) {
+          const CHUNK_SIZE = 5000;
+          let cols = null;
+          let rowCount = 0;
+          for (let offset = 0; offset < totalRows; offset += CHUNK_SIZE) {
+            const [rows] = await conn.query(`SELECT * FROM \`${table}\` LIMIT ? OFFSET ?`, [CHUNK_SIZE, offset]);
+            if (!rows.length) break;
+            if (!cols) cols = Object.keys(rows[0]);
 
-          if (batch.length >= 1000) {
+            for (let i = 0; i < rows.length; i += 1000) {
+              const batch = rows.slice(i, i + 1000);
+              const valuesSql = batch.map(r => `(${cols.map(c => sqlEscapeString(r[c])).join(', ')})`).join(',\n');
+              await write(`INSERT INTO \`${table}\` (\`${cols.join('`, `')}\`) VALUES\n${valuesSql};\n`);
+            }
+            rowCount += rows.length;
+            totalDumpedRows += rows.length;
+          }
+          await write(`\n`);
+          console.log(`[backup] Dumped ${rowCount} rows for ${table} in chunks.`);
+        } else {
+          const stream = conn.connection.query(`SELECT * FROM \`${table}\``).stream();
+          let batch = [];
+          let cols = null;
+          let rowCount = 0;
+
+          for await (const row of stream) {
+            if (!cols) cols = Object.keys(row);
+            batch.push(row);
+            rowCount++;
+            totalDumpedRows++;
+
+            if (batch.length >= 1000) {
+              const valuesSql = batch.map(r => `(${cols.map(c => sqlEscapeString(r[c])).join(', ')})`).join(',\n');
+              await write(`INSERT INTO \`${table}\` (\`${cols.join('`, `')}\`) VALUES\n${valuesSql};\n`);
+              batch = [];
+            }
+          }
+
+          if (batch.length > 0) {
             const valuesSql = batch.map(r => `(${cols.map(c => sqlEscapeString(r[c])).join(', ')})`).join(',\n');
             await write(`INSERT INTO \`${table}\` (\`${cols.join('`, `')}\`) VALUES\n${valuesSql};\n`);
-            batch = [];
           }
-        }
 
-        if (batch.length > 0) {
-          const valuesSql = batch.map(r => `(${cols.map(c => sqlEscapeString(r[c])).join(', ')})`).join(',\n');
-          await write(`INSERT INTO \`${table}\` (\`${cols.join('`, `')}\`) VALUES\n${valuesSql};\n`);
+          await write(`\n`);
+          console.log(`[backup] Dumped ${rowCount} rows for ${table}.`);
         }
-
-        await write(`\n`);
-        console.log(`[backup] Dumped ${rowCount} rows for ${table}.`);
       }
     } finally {
       conn.release();

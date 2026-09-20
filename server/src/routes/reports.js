@@ -11,7 +11,7 @@ router.use(authenticate);
 /**
  * GET /api/reports/export — the filtered result set as an .xlsx workbook.
  */
-router.get('/export', requireRole(ROLES.A1, ROLES.A2), async (req, res, next) => {
+router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
   try {
     const f = await buildFilter(req);
 

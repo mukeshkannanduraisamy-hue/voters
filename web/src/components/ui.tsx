@@ -232,12 +232,13 @@ export function PhoneInput({
           <button
             type="button"
             className="input-contact-btn"
-            title="Import from device contacts / தொடர்புகளிலிருந்து இறக்குமதி செய்க"
-            aria-label="Import from contacts"
+            title="Import contact / தொடர்புகளிலிருந்து இறக்குமதி செய்க"
+            aria-label="Import contact"
             disabled={pickingContact}
             onClick={(e) => { e.stopPropagation(); onPickContact(); }}
           >
             {pickingContact ? <span className="spinner" /> : <Icon name="users" size={14} />}
+            <span className="input-contact-btn-text">Import</span>
           </button>
         )}
       </div>

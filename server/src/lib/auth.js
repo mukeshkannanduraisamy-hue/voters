@@ -106,26 +106,34 @@ async function resolveSession(req) {
 
 /** Requires a valid session; rejects the request with 401/403 when there isn't one. */
 export async function authenticate(req, res, next) {
-  const result = await resolveSession(req);
-  if (result.error) {
-    if (result.clearCookie) clearAuthCookie(res);
-    return res.status(result.status).json({ error: result.error });
+  try {
+    const result = await resolveSession(req);
+    if (result.error) {
+      if (result.clearCookie) clearAuthCookie(res);
+      return res.status(result.status).json({ error: result.error });
+    }
+    req.user = result.user;
+    touchLastSeen(result.user.id);
+    next();
+  } catch (err) {
+    next(err);
   }
-  req.user = result.user;
-  touchLastSeen(result.user.id);
-  next();
 }
 
 /**
  * Identifies the caller when possible but never rejects the request.
  */
 export async function authenticateOptional(req, res, next) {
-  const result = await resolveSession(req);
-  if (result.user) {
-    req.user = result.user;
-    touchLastSeen(result.user.id);
+  try {
+    const result = await resolveSession(req);
+    if (result.user) {
+      req.user = result.user;
+      touchLastSeen(result.user.id);
+    }
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
 }
 
 /** A user is considered "online" if seen within this window. Shared with routes that report it. */

@@ -4,6 +4,7 @@ import {
   Alert, Field, Input, PhoneInput, Select, Switch, Textarea,
 } from './ui';
 import { CollapsiblePartyPicker, PartyGrid } from './spec-ui';
+import { ContactImportModal } from './ContactImportModal';
 import type { AnswerMap, FieldOption, FormField } from '../lib/formSchema';
 import { isMulti, isOthersSector, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
 
@@ -114,6 +115,7 @@ export function DynamicField({
   pickingContact?: boolean;
 }) {
   const allOptions = useFieldOptions(field);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   if (field.source?.kind === 'master' && field.source.master && allOptions.length > 0) {
     cachedOptionsByMaster.set(field.source.master, allOptions);
   }
@@ -267,9 +269,26 @@ export function DynamicField({
 
       case 'phone':
         return (
-          <PhoneInput value={str} placeholder={placeholder ?? '9840112233'} invalid={!!err}
-            onChange={(v) => onChange(field.key, v)}
-            onPickContact={onPickContact} pickingContact={pickingContact} />
+          <>
+            <PhoneInput
+              value={str}
+              placeholder={placeholder ?? '9840112233'}
+              invalid={!!err}
+              onChange={(v) => onChange(field.key, v)}
+              onPickContact={onPickContact ?? (() => setImportModalOpen(true))}
+              pickingContact={pickingContact}
+            />
+            {importModalOpen && (
+              <ContactImportModal
+                open={importModalOpen}
+                onClose={() => setImportModalOpen(false)}
+                onSelect={(digits) => {
+                  onChange(field.key, digits);
+                  setImportModalOpen(false);
+                }}
+              />
+            )}
+          </>
         );
 
       case 'date':

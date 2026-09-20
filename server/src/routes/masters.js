@@ -569,11 +569,14 @@ router.delete('/:type/:id', requireRole(ROLES.A1), async (req, res, next) => {
 
     const usedRow = await db.prepare(`SELECT COUNT(*) c FROM voter_surveys WHERE ${def.usage} = ?`).get(id);
     const used = usedRow?.c ?? 0;
-    if (used > 0) {
+    if (used > 0 && req.query.force !== '1') {
       return res.status(409).json({
         error: `In use by ${used.toLocaleString()} survey record(s). Disable it instead of deleting.`,
         usage_count: used,
       });
+    }
+    if (used > 0 && req.query.force === '1') {
+      await db.prepare(`UPDATE voter_surveys SET ${def.usage} = NULL WHERE ${def.usage} = ?`).run(id);
     }
     const info = await db.prepare(`DELETE FROM ${def.table} WHERE id = ?`).run(id);
     if (!info.changes) return res.status(404).json({ error: `${def.label} entry not found` });

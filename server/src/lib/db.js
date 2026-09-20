@@ -31,6 +31,10 @@ export const pool = mysql.createPool({
   ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: false },
 });
 
+pool.on?.('error', (err) => {
+  console.warn('[mysql pool background error]', err?.code || err?.message);
+});
+
 const VMS_TABLES = [
   'voters_master', 'polling_parts', 'users', 'user_jurisdictions',
   'caste_master', 'job_master', 'party_master', 'education_master',
@@ -72,16 +76,17 @@ function flatParams(args) {
 // it to the user as a 500.
 const TRANSIENT_CODES = new Set([
   'PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED',
-  'EPIPE', 'PROTOCOL_SEQUENCE_TIMEOUT',
+  'EPIPE', 'PROTOCOL_SEQUENCE_TIMEOUT', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH',
 ]);
 
-async function poolQuery(sql, params) {
-  try {
-    return await pool.query(sql, params);
-  } catch (err) {
-    if (!TRANSIENT_CODES.has(err.code)) throw err;
-    await new Promise((r) => setTimeout(r, 150));
-    return await pool.query(sql, params);
+async function poolQuery(sql, params, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await pool.query(sql, params);
+    } catch (err) {
+      if (!TRANSIENT_CODES.has(err.code) || attempt === retries) throw err;
+      await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+    }
   }
 }
 
@@ -159,10 +164,10 @@ export async function withTransaction(callback) {
     await conn.commit();
     return result;
   } catch (err) {
-    await conn.rollback();
+    try { await conn.rollback(); } catch {}
     throw err;
   } finally {
-    conn.release();
+    try { conn.release(); } catch {}
   }
 }
 

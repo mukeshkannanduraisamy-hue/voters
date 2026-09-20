@@ -210,7 +210,11 @@ export function validateAnswers(
       else if (v.min !== undefined && n < v.min) errors[field.key] = `${field.label} must be at least ${v.min}`;
       else if (v.max !== undefined && n > v.max) errors[field.key] = `${field.label} must be at most ${v.max}`;
     } else if (field.type === 'phone') {
-      if (!/^[6-9]\d{9}$/.test(str)) errors[field.key] = 'Enter a valid 10-digit number starting 6-9';
+      let digits = str.trim().replace(/[\s-]/g, '');
+      if (digits.startsWith('+91')) digits = digits.slice(3);
+      else if (digits.startsWith('91') && digits.length === 12) digits = digits.slice(2);
+      else if (digits.startsWith('0') && digits.length === 11) digits = digits.slice(1);
+      if (!/^[6-9]\d{9}$/.test(digits)) errors[field.key] = 'Enter a valid 10-digit number starting 6-9';
     } else if (field.type === 'date') {
       if (v.minDate && str < v.minDate) errors[field.key] = `${field.label} cannot be before ${v.minDate}`;
       else if (v.maxDate && str > v.maxDate) errors[field.key] = `${field.label} cannot be after ${v.maxDate}`;

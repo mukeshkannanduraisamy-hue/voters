@@ -409,9 +409,21 @@ export async function validateSubmission(fields, submitted) {
         value = String(n);
         break;
       }
-      case 'phone':
-        if (!/^[6-9]\d{9}$/.test(value)) errors[field.key] = 'Enter a valid 10-digit number starting 6-9';
+      case 'phone': {
+        let digits = String(value).trim().replace(/[\s-]/g, '');
+        if (digits.startsWith('+91')) digits = digits.slice(3);
+        else if (digits.startsWith('91') && digits.length === 12) digits = digits.slice(2);
+        else if (digits.startsWith('0') && digits.length === 11) digits = digits.slice(1);
+
+        if (!/^[6-9]\d{9}$/.test(digits)) {
+          errors[field.key] = 'Enter a valid 10-digit number starting 6-9';
+        } else {
+          value = digits;
+          values[field.key] = digits;
+          if (field.bind) systemValues[field.bind] = digits;
+        }
         break;
+      }
       case 'date': {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value))) {
           errors[field.key] = `${field.label} must be a valid date`; break;

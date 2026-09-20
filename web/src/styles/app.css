@@ -323,19 +323,21 @@
 .input-contact-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
   margin-right: 6px;
-  padding: 6px;
-  width: 30px;
+  padding: 4px 10px;
   height: 30px;
   background: var(--brand-50, #eff6ff);
   color: var(--brand-700, #1d4ed8);
-  border: 1px solid var(--brand-500, #3b82f6);
+  border: 1px solid var(--brand-400, #60a5fa);
   border-radius: var(--r-sm, 6px);
   cursor: pointer;
+  font-size: var(--fs-xs, 12px);
+  font-weight: 600;
   transition: all var(--dur, 0.15s) var(--ease, ease);
   user-select: none;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .input-contact-btn:hover:not(:disabled),
@@ -353,6 +355,12 @@
 .input-contact-btn .spinner {
   width: 14px;
   height: 14px;
+}
+
+.input-contact-btn-text {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* segmented radio control */

@@ -686,6 +686,8 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
   const [confirmDeleteSector, setConfirmDeleteSector] = useState(false);
   const [deletingSector, setDeletingSector] = useState(false);
+  const [confirmDeleteJob, setConfirmDeleteJob] = useState(false);
+  const [deletingJob, setDeletingJob] = useState(false);
 
   const selectedSector = sectors.find((s) => s.category === category);
 
@@ -707,6 +709,21 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
     finally { setSaving(false); }
   };
 
+  const deleteJob = async () => {
+    if (!row) return;
+    setDeletingJob(true);
+    try {
+      await api.del(`/api/masters/job/${row.id}`);
+      toast.ok('Sub-job deleted', row.name);
+      onSaved();
+    } catch (err) {
+      toast.bad('Could not delete sub-job', err instanceof ApiError ? err.message : undefined);
+      setConfirmDeleteJob(false);
+    } finally {
+      setDeletingJob(false);
+    }
+  };
+
   const deleteSector = async () => {
     if (!selectedSector) return;
     setDeletingSector(true);
@@ -724,8 +741,26 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
 
   return (
     <Modal open title={isNew ? 'Add new sub-job' : 'Edit sub-job'} icon="briefcase" onClose={onClose}
-      footer={<><Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>{isNew ? 'Add sub-job' : 'Save changes'}</Button></>}>
+      footer={
+        <>
+          {!isNew && (
+            <Button
+              type="button"
+              variant="danger-soft"
+              icon="trash"
+              disabled={saving}
+              onClick={() => setConfirmDeleteJob(true)}
+              style={{ marginRight: 'auto' }}
+            >
+              Delete sub-job
+            </Button>
+          )}
+          <Button onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="primary" icon="save" loading={saving} onClick={() => void save()}>
+            {isNew ? 'Add sub-job' : 'Save changes'}
+          </Button>
+        </>
+      }>
       {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
       <div className="stack">
         <Field label="1. Main sector" hint="Pick an existing sector, or switch to enter a new one">
@@ -776,6 +811,18 @@ function EditJobModal({ row, sectors, onClose, onSaved }: {
         }
         onCancel={() => setConfirmDeleteSector(false)} onConfirm={() => void deleteSector()}
       />
+      {!isNew && row && (
+        <ConfirmModal
+          open={confirmDeleteJob} danger title={`Delete "${row.name}"?`} confirmLabel="Delete sub-job"
+          busy={deletingJob}
+          message={
+            row.usage_count
+              ? <>Used by <strong>{fmt(row.usage_count)}</strong> survey record(s), so it cannot be deleted. Disable it instead.</>
+              : <>This removes this sub-job permanently. This cannot be undone.</>
+          }
+          onCancel={() => setConfirmDeleteJob(false)} onConfirm={() => void deleteJob()}
+        />
+      )}
     </Modal>
   );
 }

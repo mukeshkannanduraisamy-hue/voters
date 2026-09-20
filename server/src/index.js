@@ -19,6 +19,13 @@ import masterCategoryRoutes from './routes/masterCategories.js';
 import backupRoutes from './routes/backups.js';
 import { startBackupScheduler } from './lib/backupScheduler.js';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[server unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[server uncaughtException]', err);
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Automatically load local .env file if present
