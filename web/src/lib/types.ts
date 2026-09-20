@@ -80,6 +80,7 @@ export interface SurveyRecord {
   jobNameTa: string | null;
   jobCategory: string | null;
   jobCategoryTa: string | null;
+  jobType: string | null;
   otherJobText: string | null;
   partyId: number | null;
   partyName: string | null;

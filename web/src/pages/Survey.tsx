@@ -71,6 +71,7 @@ export default function Survey() {
       job_id: survey?.jobId ? String(survey.jobId) : '',
       party_id: survey?.partyId ? String(survey.partyId) : '',
       education_id: survey?.educationId ? String(survey.educationId) : '',
+      job_type: survey?.jobType ?? '',
       other_job_text: survey?.otherJobText ?? '',
       remarks: survey?.remarks ?? '',
     };

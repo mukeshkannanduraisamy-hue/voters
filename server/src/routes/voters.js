@@ -17,7 +17,7 @@ const VOTER_COLUMNS = `
   pp.local_body_name_ta, pp.local_body_type, pp.main_village_ta,
   pp.ac_no, pp.ac_name_ta, pp.taluk_ta, pp.district_ta, pp.pincode,
   s.epic_id AS survey_epic, s.corrected_name_ta, s.corrected_relative_name_ta,
-  s.phone_number, s.caste_id, s.job_id, s.party_id, s.education_id, s.other_job_text, s.remarks,
+  s.phone_number, s.caste_id, s.job_id, s.party_id, s.education_id, s.job_type, s.other_job_text, s.remarks,
   s.surveyed_at, s.surveyed_by, s.last_updated_by,
   cm.name AS caste_name, cm.name_ta AS caste_name_ta, cm.category AS caste_category,
   jm.name AS job_name, jm.name_ta AS job_name_ta, jm.category AS job_category, jm.category_ta AS job_category_ta,
@@ -127,6 +127,7 @@ async function shapeVoter(r, { includeCustomFields = false, schemaFields = null 
           educationId: r.education_id,
           educationName: r.education_name,
           educationNameTa: r.education_name_ta,
+          jobType: r.job_type ?? null,
           remarks: r.remarks,
           surveyedAt: r.surveyed_at,
           agentName: r.agent_name,
@@ -330,6 +331,8 @@ const LEGACY_ALIASES = {
   party_id: 'party_id',
   educationId: 'education_id',
   education_id: 'education_id',
+  jobType: 'job_type',
+  job_type: 'job_type',
   otherJobText: 'other_job_text',
   other_job_text: 'other_job_text',
   remarks: 'remarks',
@@ -421,9 +424,9 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
       await trx.prepare(
         `INSERT INTO voter_surveys
            (epic_id, corrected_name_ta, corrected_relative_name_ta, phone_number,
-            caste_id, job_id, party_id, education_id, other_job_text, remarks,
+            caste_id, job_id, party_id, education_id, job_type, other_job_text, remarks,
             surveyed_by, last_updated_by, surveyed_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())
          ON DUPLICATE KEY UPDATE
            corrected_name_ta = VALUES(corrected_name_ta),
            corrected_relative_name_ta = VALUES(corrected_relative_name_ta),
@@ -432,6 +435,7 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
            job_id = VALUES(job_id),
            party_id = VALUES(party_id),
            education_id = VALUES(education_id),
+           job_type = VALUES(job_type),
            other_job_text = VALUES(other_job_text),
            remarks = VALUES(remarks),
            last_updated_by = VALUES(last_updated_by),
@@ -441,6 +445,7 @@ router.post('/survey/submit', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (
         systemValues.phone_number ?? '',
         systemValues.caste_id ?? null, systemValues.job_id ?? null,
         systemValues.party_id ?? null, systemValues.education_id ?? null,
+        systemValues.job_type ?? null,
         systemValues.other_job_text ?? null, systemValues.remarks ?? null,
         surveyedBy, req.user.id
       );

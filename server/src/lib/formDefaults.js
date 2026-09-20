@@ -30,6 +30,7 @@ export const SYSTEM_BINDINGS = {
   job_id:          { kind: 'masterId', master: 'job' },
   party_id:        { kind: 'masterId', master: 'party' },
   education_id:    { kind: 'masterId', master: 'education' },
+  job_type:        { kind: 'text' },
   other_job_text:  { kind: 'text' },
   remarks:         { kind: 'text' },
 };
@@ -59,7 +60,7 @@ export const DEFAULT_FIELDS = [
     source: { kind: 'master', master: 'education' },
   },
   {
-    key: 'job_type', type: 'radio', bind: null, width: 'full', active: true, required: false,
+    key: 'job_type', type: 'radio', bind: 'job_type', width: 'full', active: true, required: false,
     label: 'Job type',
     source: {
       kind: 'static',

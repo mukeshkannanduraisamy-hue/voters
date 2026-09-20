@@ -403,6 +403,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
               <Cell k="Caste / community" v={`${s.casteNameTa ?? s.casteName ?? '—'}${s.casteCategory ? ` (${s.casteCategory})` : ''}`} ta />
               <Cell k="Occupation sector" v={s.jobCategoryTa ?? s.jobCategory ?? '—'} ta />
               <Cell k="Occupation" v={s.jobNameTa ?? s.jobName ?? '—'} ta />
+              {s.jobType && <Cell k="Job type" v={s.jobType} />}
               {s.otherJobText && <Cell k="Custom job note" v={s.otherJobText} span2 ta />}
               {s.educationName && <Cell k="Education" v={s.educationName} />}
               {s.correctedNameTa && <Cell k="Corrected name" v={s.correctedNameTa} ta />}
@@ -453,6 +454,7 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
       job_id: s?.jobId ? String(s.jobId) : '',
       party_id: s?.partyId ? String(s.partyId) : '',
       education_id: s?.educationId ? String(s.educationId) : '',
+      job_type: s?.jobType ?? '',
       other_job_text: s?.otherJobText ?? '',
       remarks: s?.remarks ?? '',
     };

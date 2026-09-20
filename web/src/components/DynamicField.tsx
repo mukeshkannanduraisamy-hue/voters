@@ -344,17 +344,22 @@ export function DynamicField({
               options.map((o) => {
                 const on = str === o.value;
                 return (
-                  <label key={o.value} className={`radio-opt ${on ? 'on' : ''}`}>
+                  <label
+                    key={o.value}
+                    className={`radio-opt ${on ? 'on' : ''}`}
+                    onClick={(e) => {
+                      if (isDisabled) return;
+                      e.preventDefault();
+                      onChange(field.key, on ? '' : o.value);
+                    }}
+                  >
                     <input
                       type="radio"
                       name={field.key}
                       value={o.value}
                       checked={on}
                       disabled={isDisabled}
-                      onChange={() => onChange(field.key, on ? '' : o.value)}
-                      onClick={() => {
-                        if (on) onChange(field.key, '');
-                      }}
+                      readOnly
                     />
                     <span>{optLabel(o)}</span>
                   </label>
