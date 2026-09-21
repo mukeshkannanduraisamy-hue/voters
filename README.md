@@ -15,11 +15,20 @@ live progress analytics, loaded with the real Tamil Nadu electoral roll.
 
 ## Quick start
 
+The app is **direct-MySQL only** (see [Architecture](#architecture)) — there is
+no offline/SQLite mode to fall back to, so a real MySQL database is required
+even for local development.
+
+**1. Create `server/.env`** (copy from `server/.env.example`) with a MySQL
+connection your machine can reach — `DB_HOST`, `DB_PORT`, `DB_USER`,
+`DB_PASSWORD`, `DB_NAME` — plus a `VMS_JWT_SECRET` of your choosing. The server
+refuses to start without every one of these; there is no hardcoded fallback.
+
 ```bash
 npm run setup
 ```
 
-Installs both workspaces, imports the workbook into SQLite and seeds master data
+Installs both workspaces, imports the workbook into MySQL and seeds master data
 plus demo accounts (about a minute — it parses a 21 MB workbook).
 
 ```bash
@@ -44,9 +53,42 @@ The login screen lists these and fills them on click.
 ```bash
 npm run dev:api     # API with --watch on :4000
 npm run dev:web     # Vite dev server on :5173, proxying /api
-npm test            # 178 API checks across every module and role
-npm run sync:test    # 20 transactional-outbox apply-logic checks (no MySQL needed)
+npm test            # 200+ API checks across every module and role — needs a real
+                    #   database; NEVER point this at production (see Testing below)
+npm run sync:test    # 20 legacy transactional-outbox apply-logic checks (no MySQL needed)
 ```
+
+### Testing — never against production
+
+`npm test` logs in, creates/edits/deletes users, publishes form schema
+versions, and writes survey answers. **Never point `DB_HOST`/`DB_NAME` (or the
+`BASE` URL passed to `scripts/test-api.mjs`) at the production database or a
+production-connected server.** There is no read-only mode.
+
+To test safely, point `server/.env` (or env vars on the command that starts
+the server) at a disposable MySQL instance instead — a local MySQL/MariaDB
+install, a throwaway container, or an ephemeral in-process server such as
+[`mysql-memory-server`](https://www.npmjs.com/package/mysql-memory-server).
+Then, against that database only:
+
+```bash
+DB_HOST=... DB_PORT=... DB_USER=... DB_PASSWORD=... DB_NAME=... DB_SSL=false \
+  node scripts/init-mysql.mjs               # creates the vms_ schema
+DB_HOST=... DB_PORT=... DB_USER=... DB_PASSWORD=... DB_NAME=... DB_SSL=false \
+  node scripts/migrate-form-builder.mjs     # adds the form-builder schema
+DB_HOST=... DB_PORT=... DB_USER=... DB_PASSWORD=... DB_NAME=... DB_SSL=false \
+  node scripts/seed-synthetic-test-data.mjs # fabricated booths/electors + demo accounts —
+                                             #   refuses to run unless DB_NAME contains "test"
+```
+
+Then start the server against that same database (same env vars, plus `PORT`
+to avoid clashing with a real instance) and run `node scripts/test-api.mjs
+http://localhost:<that port>`. `seed-synthetic-test-data.mjs` never touches
+the real electoral roll — it fabricates its own small set of booths and
+electors, which is enough for every RBAC, scoping, and business-logic check
+in the suite (booth/voter *counts* in the assertions are read from
+`/api/health` rather than hardcoded, so the suite adapts to whatever database
+it's pointed at).
 
 ---
 
@@ -85,7 +127,7 @@ permission tree, so a booth is never reachable by two different paths.
 | Master data | ✅ manage | read-only dropdowns | read-only dropdowns |
 | Voters directory | all | in scope | in scope |
 | Field survey | ❌ | ❌ | ✅ |
-| Excel export | ✅ | ✅ (scoped) | ❌ |
+| Excel export | ✅ | ❌ | ❌ |
 | Activity log | ✅ | ❌ | ❌ |
 
 A scoped user with no assignment resolves to `1=0` — they see nothing rather than
@@ -152,186 +194,134 @@ tracking vector, so it is rejected.
 
 ## Architecture
 
+> **This section describes the system as it runs today.** The project started on
+> SQLite with a separate `sync-server` mirroring writes to MySQL (see
+> [Legacy: the SQLite + sync-server design](#legacy-the-sqlite--sync-server-design)
+> below); commit `6490f7d` ("migrate database directly to MySQL on Hostinger")
+> switched `server/` to talk to MySQL directly instead. The docs had drifted from
+> that change until this pass — the tree and schema below match the current code.
+
 ```
 VMS/
-├── server/                      Express 4 REST API (ESM, Node ≥ 22.5) — the sync client
+├── server/                      Express 4 REST API (ESM) — talks to MySQL directly
 │   ├── src/
 │   │   ├── index.js             wiring, static SPA hosting, error handling
-│   │   ├── lib/db.js            node:sqlite connection, schema, indexes
+│   │   ├── lib/db.js            mysql2 pool + a better-sqlite3-shaped query
+│   │   │                        wrapper (prepare().get/all/run), SQLite→MySQL
+│   │   │                        SQL translation, table name prefixing (vms_*)
 │   │   ├── lib/auth.js          scrypt, JWT cookie, authenticate/requireRole
 │   │   ├── lib/scope.js         booth-level jurisdiction — the heart of the RBAC
-│   │   ├── lib/outbox.js        transactional outbox: schema + trigger installer
-│   │   ├── lib/syncWorker.js    background batch sync loop with retry/backoff
-│   │   └── routes/              auth, users, masters, voters, dashboard, booths, reports, sync
+│   │   ├── lib/backup.js        mysqldump-based backup snapshots
+│   │   ├── lib/formSchema.js    dynamic form builder: schema validation + submission validation
+│   │   ├── lib/outbox.js,       legacy transactional-outbox code from the SQLite
+│   │   │   syncWorker.js        design; not imported by index.js — dead code, kept
+│   │   │                        only for the sync-server unit tests. See the legacy
+│   │   │                        section below before relying on either of these.
+│   │   └── routes/              auth, users, masters, master-categories, form-schema,
+│   │                            voters, dashboard, booths, reports, backups, sync
 │   └── scripts/
-│       ├── import-data.mjs      workbook → SQLite
-│       ├── seed-data.mjs        reference data (castes, sectors, party emblems)
-│       ├── seed.mjs             masters + demo accounts
-│       └── test-api.mjs         the 178-check suite
-├── sync-server/                 Central ingestion API — the ONLY thing that talks to MySQL
-│   ├── src/
-│   │   ├── index.js             wiring, MySQL migration on boot, error handling
-│   │   ├── lib/db.js            mysql2 pool + idempotent CREATE TABLE IF NOT EXISTS
-│   │   ├── lib/auth.js          shared-secret Bearer auth (constant-time compare)
-│   │   ├── lib/tables.js        mirror-table DDL + the generic upsert/delete builder
-│   │   ├── lib/processEvent.js  one event, one transaction, idempotent apply
-│   │   └── routes/sync.js       POST /api/sync/ingest
-│   └── scripts/test-apply.mjs   20 apply-logic unit tests (fake connection, no MySQL needed)
-├── shared/sync-tables.mjs       single source of truth: which tables sync, PK, columns
+│       ├── init-mysql.mjs           creates the vms_* MySQL schema (idempotent)
+│       ├── migrate-form-builder.mjs adds the form-builder + custom-masters schema
+│       ├── import-data.mjs          workbook → MySQL
+│       ├── seed-data.mjs            reference data (castes, sectors, party emblems)
+│       ├── seed.mjs                 masters + demo accounts
+│       ├── test-api.mjs             the 200+-check API suite
+│       ├── test-master-categories.mjs  targeted usage-check regression tests
+│       └── seed-synthetic-test-data.mjs  fabricated booths/electors for safe testing
+├── sync-server/                 Legacy central ingestion API — see the legacy
+│                                 section below. Not wired up to `server/` today;
+│                                 `server/` no longer emits any sync events for it
+│                                 to receive.
+├── shared/sync-tables.mjs       legacy: table whitelist for the SQLite outbox triggers
 ├── web/                         React 18 + TypeScript + Vite
 │   └── src/
 │       ├── App.tsx              routes and RBAC guards
 │       ├── lib/                 cookie API client, auth context, shared types
 │       ├── components/          Shell, BoothPicker, design system, spec widgets
-│       ├── pages/               the eleven screens above
+│       ├── pages/               the screens above
 │       └── styles/              tokens, component layer, spec additions
-└── data/vms.db                  generated SQLite database
+└── data/                        legacy SQLite artifacts from before the MySQL migration
 ```
 
-### Why SQLite rather than PostgreSQL
+### Database: direct MySQL (Hostinger)
 
-The schema mirrors a PostgreSQL design with the type mapping `UUID → TEXT`,
-`SERIAL → INTEGER PRIMARY KEY AUTOINCREMENT`, `BOOLEAN → INTEGER`,
-`TIMESTAMPTZ → TEXT` (ISO-8601 UTC). It uses Node's built-in `node:sqlite`, so the
-whole system runs with **no database server to install and no native modules to
-compile**. Porting means swapping the driver in `lib/db.js`; the route SQL is
-standard.
+`server/src/lib/db.js` opens a `mysql2` connection pool straight to the central
+MySQL database and exposes a `better-sqlite3`-shaped API (`db.prepare(sql).get()
+/.all()/.run()`) so the route code above it still reads like synchronous SQLite —
+`translateSql()` rewrites the SQLite-flavoured SQL the routes write (`COLLATE
+NOCASE`, `ON CONFLICT ... DO NOTHING`, `strftime`, etc.) into MySQL syntax, and
+every application table name is transparently prefixed with `vms_` (so `voters_master`
+in a route's SQL string resolves to the real table `vms_voters_master`).
+
+Configure the connection via `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` /
+`DB_NAME` in `server/.env` — see [Configuration](#configuration). **There is no
+SQLite fallback for the application data anymore**; `data/vms.db` is a leftover
+from before the migration and is not read by the running server.
 
 ### Schema
 
 ```
-polling_parts (part_no PK, ac_no, local_body_name_ta, local_body_type, …)
+vms_polling_parts (part_no PK, ac_no, local_body_name_ta, local_body_type, …)
       ▲                                      ▲
       │ part_no                              │ part_no
-voters_master (epic_id PK, voter_sno, name_ta, relative_name_ta, door_no, age, gender)
+vms_voters_master (epic_id PK, voter_sno, name_ta, relative_name_ta, door_no, age, gender)
       ▲ epic_id
-voter_surveys (epic_id PK, phone_number, caste_id, job_id, party_id,
-               corrected_name_ta, other_job_text, surveyed_by, surveyed_at)
-                     │           │          │
-             caste_master   job_master   party_master
-             (+ category)   (category    (+ party_code,
-                             = sector)    color_code,
-                                          symbol_img Base64)
+vms_voter_surveys (epic_id PK, phone_number, caste_id, job_id, party_id, education_id,
+                    corrected_name_ta, other_job_text, surveyed_by, surveyed_at)
+                     │           │          │           │
+             vms_caste_master  vms_job_master  vms_party_master  vms_education_master
+             (+ category)      (category       (+ party_code,
+                                = sector)       color_code,
+                                                symbol_img Base64)
 
-users (id PK, mobile_number UNIQUE, password_hash, role, epic_id, is_active)
+vms_users (id PK, mobile_number UNIQUE, password_hash, role, epic_id, is_active)
       ▲ user_id
-user_jurisdictions (user_id, part_no)   ← booth-level scope
+vms_user_jurisdictions (user_id, part_no)   ← booth-level scope
+
+-- Dynamic form builder (added by migrate-form-builder.mjs):
+vms_form_schemas (versioned field definitions: draft/published/archived)
+vms_survey_answers (epic_id, field_key, value)   ← custom-field answers, keyed by
+                                                     stable field key, no FK to the
+                                                     field definition (renaming or
+                                                     retiring a field never deletes
+                                                     a citizen's recorded answer)
+vms_master_categories / vms_master_items   ← admin-defined lookup lists beyond the
+                                              four built-in masters above
 ```
 
-`voter_surveys` is keyed on `epic_id`, so re-surveying an elector is an **UPSERT**
-rather than a duplicate row.
+`vms_voter_surveys` is keyed on `epic_id`, so re-surveying an elector is an
+**UPSERT** (`INSERT ... ON DUPLICATE KEY UPDATE`) rather than a duplicate row.
 
 ---
 
-## Central MySQL sync
+## Legacy: the SQLite + sync-server design
 
-SQLite stays the local source of truth — the app works fully offline against it.
-A **transactional outbox** mirrors every write to a central MySQL database, using
-a pattern that survives crashes, offline stretches and duplicate delivery without
-losing or double-applying anything:
+Everything in this section describes how the system worked **before** the direct
+MySQL migration and is **not active in the code that runs today**:
 
-```
-┌─────────────────────────┐        ┌──────────────────────┐        ┌──────────────┐
-│  server/  (SQLite)      │        │  sync-server/         │        │  MySQL       │
-│                         │        │                        │        │              │
-│  write to e.g.          │  HTTPS │  POST /api/sync/ingest │        │  mirror      │
-│  voter_surveys  ───┐    │ ────►  │  (Bearer API key)      │ ────►  │  tables +    │
-│                    │    │ batch  │                        │  SQL   │  sync_events │
-│  AFTER trigger      │   │        │  1 event = 1 MySQL     │        │  ledger      │
-│  (same transaction) │   │        │  transaction:          │        │  (event_id   │
-│                    ▼    │        │  INSERT ledger row +   │        │   is the     │
-│  sync_outbox (pending)  │        │  apply to mirror, or   │        │   PRIMARY    │
-│         ▲               │        │  rollback both         │        │   KEY)       │
-│         │ mark synced    │        │                        │        │              │
-│         └── only after ◄──────── │  { results: [...] }    │        │              │
-│             a 200 ack   │        │                        │        │              │
-└─────────────────────────┘        └────────────────────────┘        └──────────────┘
-```
+- `server/src/lib/outbox.js` and `server/src/lib/syncWorker.js` implement a
+  SQLite transactional outbox (AFTER triggers + a background batch-sync loop to
+  `sync-server`). Neither is imported by `server/src/index.js` anymore — they
+  only exist so `sync-server`'s own unit tests keep working, and because they
+  document a pattern worth keeping if a future multi-writer deployment needs it.
+- `sync-server/` is a separate deployable Express service that used to be the
+  only thing holding MySQL credentials, applying batched outbox events from
+  `server/` to MySQL in an idempotent, crash-safe way (idempotency ledger
+  `sync_events`, one MySQL transaction per event, duplicate/rollback handling —
+  see `sync-server/src/lib/processEvent.js`). With `server/` now writing to
+  MySQL directly, nothing calls `sync-server`'s `/api/sync/ingest` endpoint.
+- `shared/sync-tables.mjs` is the table whitelist the outbox triggers and
+  `sync-server`'s mirror-table DDL were both built from.
+- `GET /api/sync/status` now just reports the static "direct MySQL, always
+  connected" status (see `server/src/routes/sync.js`) — the pending/synced
+  counters it used to report no longer mean anything, because nothing writes to
+  `sync_outbox` anymore.
 
-**SQLite never connects to MySQL directly** — `sync-server` is the only thing
-holding MySQL credentials, and it's a separate deployable service.
-
-### How each requirement is met
-
-| Requirement | Where |
-|---|---|
-| Same-transaction outbox write | `AFTER INSERT/UPDATE/DELETE` triggers on each synced table, installed by `outbox.js`. A trigger fires inside the exact transaction of the write it's attached to — there is no window where one exists without the other. |
-| Unique `event_id` | `vms_uuid()`, a SQL function backed by `crypto.randomUUID()`, called by every trigger. |
-| Background worker, batch sync | `syncWorker.js` polls `sync_outbox` on an interval (`SYNC_INTERVAL_MS`, default 10s) and POSTs up to `SYNC_BATCH_SIZE` (default 100) pending events per request. |
-| Mark synced only after confirmation | The worker only calls `markSynced()` for event ids the server's response reports as `applied` or `duplicate`. Anything else — network error, non-2xx, missing result — leaves the row exactly as it was: `pending`. |
-| Offline retry | A failed batch changes nothing about the pending rows except `attempts`/`last_error` (for visibility). The next interval tick tries again automatically — no manual intervention, no lost events. |
-| MySQL duplicate safety | `sync_events.event_id` is the ledger's `PRIMARY KEY`. The ledger insert and the mirror-table apply happen in **one MySQL transaction**; a duplicate `event_id` hits the primary key, the transaction rolls back untouched, and the server reports `duplicate` — never reapplied. |
-| Apply failure ≠ stuck duplicate | If applying to the mirror table throws for any reason *other* than a duplicate key, the **whole transaction rolls back, including the ledger insert** — so a retry is a clean first attempt, not stuck believing it already succeeded. |
-| CREATE / UPDATE / DELETE | `CREATE`/`UPDATE` both upsert (`INSERT ... ON DUPLICATE KEY UPDATE`) since a row's whole current state is captured in the payload; `DELETE` runs a plain `DELETE ... WHERE pk = ?`. |
-| Retry handling + error logging | Every failed attempt is logged server-side (`console.error`, one line per batch, not per event, so an outage doesn't flood the log) and recorded per-event in `sync_outbox.last_error`. An event failing 20+ times escalates to a louder warning line — it still keeps retrying forever; nothing is ever silently dropped. |
-| Crash-safe, no data loss | The outbox row and the data change commit or roll back **together** (SQLite's transactional trigger guarantee). A crash mid-sync loses nothing beyond the in-flight HTTP request, which the next tick simply resends. |
-
-### Which tables sync
-
-Defined once, in **`shared/sync-tables.mjs`**, imported by both sides so they can
-never drift apart: `users`, `user_jurisdictions`, `caste_master`, `job_master`,
-`party_master`, `voter_surveys`, `polling_parts`.
-
-Deliberately **excluded**:
-- **`voters_master`** — 245k+ rows from a one-time bulk import. A trigger here
-  would flood the outbox with a quarter million `CREATE` events the moment
-  `import-data.mjs` runs. The roll is distributed to every deployment as the
-  same source workbook, not trickled through sync events.
-- **`audit_log`** — high-volume, low value centrally (a row on every login);
-  syncing it would multiply the event count for no operational benefit.
-
-This design assumes **one SQLite writer syncing to one central MySQL** — exactly
-what was asked for. The `INTEGER AUTOINCREMENT` primary keys (`caste_master.id`,
-`job_master.id`, `party_master.id`, `user_jurisdictions.id`) are safe under that
-assumption; they would collide across instances if multiple independent SQLite
-deployments ever synced to the same MySQL, and would need namespacing (e.g. a
-`<device_id>:<local_id>` composite key) first.
-
-### Setup
-
-**1. Create the central MySQL database.** Shared MySQL hosting (this project
-targets Hostinger) does not allow `CREATE DATABASE` from a remote connection —
-confirmed by testing directly against the provided credentials, which connect
-fine but get `ER_DBACCESS_DENIED_ERROR` on `CREATE DATABASE`. Create the database
-through the hosting control panel (hPanel → Databases → MySQL Databases):
-
-- **Database name:** `u403881955_vms_sync` (matches `sync-server/.env`'s `DB_NAME`)
-- **Grant** the existing user `u403881955_ecl_admin` full privileges on it
-
-This is the **one manual step** — everything else is automated.
-
-**2. Install and configure both services** (already done in this checkout —
-`sync-server/.env` has real values, `server/.env` has a matching generated
-`SYNC_API_KEY`; regenerate one for a different deployment with the command in
-`sync-server/.env.example`):
-
-```bash
-npm run sync:install     # npm --prefix sync-server install
-```
-
-**3. Start the central service** (creates the `sync_events` ledger and every
-mirror table on first boot, idempotently):
-
-```bash
-npm run sync:start
-```
-
-**4. Start the VMS server as usual** (`npm start` / `npm run dev:api`) — it picks
-up `SYNC_API_URL`/`SYNC_API_KEY` from `server/.env` automatically and the
-background worker starts logging `[sync] background sync worker started -> ...`.
-Leave `SYNC_API_URL` blank to run an instance with sync fully disabled (the
-default state of a checkout with no `sync-server` running — every write still
-lands an outbox row, so nothing is lost by starting sync later; it just catches
-up on the full backlog the first time it connects).
-
-Check progress any time as A1 via `GET /api/sync/status`, or query SQLite
-directly: `SELECT status, COUNT(*) FROM sync_outbox GROUP BY status;`.
-
-### Verifying it without the real MySQL
-
-`sync-server/scripts/test-apply.mjs` unit-tests the transactional apply logic
-(idempotency, rollback-on-duplicate, rollback-on-failure) against a fake MySQL
-connection — no network, no credentials, no real database required:
+If you don't need a second, independently-writable SQLite instance syncing into
+the same MySQL database, you can ignore `sync-server/`, `shared/sync-tables.mjs`,
+`outbox.js` and `syncWorker.js` entirely — they cost nothing at runtime (they're
+never imported) but are kept for `npm run sync:test` and as a reference design.
+Verify the legacy apply logic still holds with:
 
 ```bash
 npm run sync:test
@@ -365,7 +355,7 @@ npm run sync:test
 | GET | `/api/dashboard/audit` | A1 | Activity log |
 | GET | `/api/booths` | all | Booths and local bodies within scope |
 | GET | `/api/sync/status` | A1 | Outbox health: pending/synced counts, target URL |
-| GET | `/api/reports/export` | A1, A2 | Filtered result set as `.xlsx` |
+| GET | `/api/reports/export` | A1 | Filtered result set as `.xlsx` |
 
 Errors return `{ error, fields? }`, where `fields` maps a form field to its
 message so the UI can highlight the offending input.
@@ -426,20 +416,44 @@ to the columns that carry it.
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `4000` | API port |
-| `VMS_DB_PATH` | `data/vms.db` | Database location |
-| `VMS_JWT_SECRET` | dev fallback | **Set this in production** |
+| `DB_HOST` | **required** | MySQL host. The process refuses to start without it — see the security note below. |
+| `DB_PORT` | `3306` | MySQL port (not a secret; a real default is safe here) |
+| `DB_USER` | **required** | MySQL user |
+| `DB_PASSWORD` | **required** | MySQL password |
+| `DB_NAME` | **required** | MySQL database name |
+| `DB_SSL` | on | Set to `false` to disable `rejectUnauthorized: false` TLS |
+| `VMS_JWT_SECRET` | **required** | JWT signing secret. The process refuses to start without it. |
 | `VMS_JWT_TTL_SECONDS` | `86400` | Session lifetime |
 | `NODE_ENV` | — | `production` enables the `Secure` cookie flag |
-| `SYNC_API_URL` | — (sync disabled) | Base URL of `sync-server`, e.g. `http://localhost:4500` |
-| `SYNC_API_KEY` | — | Shared secret; must match `sync-server/.env`'s `SYNC_API_KEY` exactly |
-| `SYNC_BATCH_SIZE` | `100` | Max outbox events sent per sync request |
-| `SYNC_INTERVAL_MS` | `10000` | How often the background worker polls the outbox |
-| `SYNC_TIMEOUT_MS` | `15000` | Abort a stuck sync request after this long |
+| `CRON_SECRET` | — | Shared key for the external `GET /api/internal/backup-cron` trigger |
+| `BOOTSTRAP_ADMIN_MOBILE` | `9999999999` | Only consulted the very first time the database has zero A1 accounts — see the admin bootstrap note below |
+| `SYNC_API_URL` / `SYNC_API_KEY` / `SYNC_BATCH_SIZE` / `SYNC_INTERVAL_MS` / `SYNC_TIMEOUT_MS` | — | **Legacy, currently inert** — see [Legacy: the SQLite + sync-server design](#legacy-the-sqlite--sync-server-design). Nothing in `index.js` starts the worker that would read these. |
 
-`sync-server/.env` (copy from `sync-server/.env.example`):
+> **Security note (resolved).** `server/src/lib/db.js` and `server/src/lib/auth.js`
+> used to hard-code production-shaped fallback values for `DB_HOST`/`DB_USER`/
+> `DB_PASSWORD`/`DB_NAME` and `VMS_JWT_SECRET` — committed to this repository's
+> history. Both now throw a clear startup error via `requireEnv()`
+> (`server/src/lib/env.js`) if any of these are missing, instead of silently
+> falling back to a hardcoded value. **The password that fallback used to expose
+> must still be treated as compromised** — anyone with repository access (past
+> or present) could read it from git history — and should be rotated on the
+> hosting panel regardless of this code fix; changing the code cannot undo an
+> already-committed secret's exposure.
+>
+> **Admin bootstrap.** `migrate()` used to unconditionally ensure one specific
+> hardcoded mobile number existed with the hardcoded password `admin123` on
+> *every* server startup — a standing, predictable backdoor. It now only ever
+> creates an account when the database has zero `A1_SUPER_ADMIN` rows at all
+> (a fresh deployment), using a randomly generated password that is printed
+> once to the server log and never stored in plaintext. Log in with it
+> immediately and set a real password from the profile page. This never fires
+> again once any A1 account exists, so it can't reset or recreate an existing
+> admin's credentials.
+
+`sync-server/.env` — only relevant if you still run the legacy service (copy from `sync-server/.env.example`):
 
 | Variable | Purpose |
 |---|---|
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | Central MySQL connection |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | Its own MySQL connection (unlike `server/`'s `db.js`, `sync-server/`'s has no hard-coded fallback — it reads only from env) |
 | `SYNC_API_KEY` | Must match `server/.env`'s `SYNC_API_KEY` exactly |
 | `PORT` | Sync-server's own port (default `4500`) |

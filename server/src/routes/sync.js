@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate, requireRole, ROLES } from '../lib/auth.js';
+import { DB_HOST, DB_NAME } from '../lib/db.js';
 
 const router = express.Router();
 router.use(authenticate);
@@ -10,8 +11,8 @@ router.get('/status', requireRole(ROLES.A1), (req, res) => {
     enabled: false,
     apiUrl: null,
     directMySql: true,
-    host: process.env.DB_HOST || 'srv1497.hstgr.io',
-    database: process.env.DB_NAME || 'u403881955_vms',
+    host: DB_HOST,
+    database: DB_NAME,
     tablePrefix: 'vms_',
     status: 'connected',
     pending: 0,

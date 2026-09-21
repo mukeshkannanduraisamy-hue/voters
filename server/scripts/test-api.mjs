@@ -39,12 +39,18 @@ const run = async () => {
 console.log(`\n  VMS API test suite → ${BASE}`);
 
 // ───────────────────────────────── health
+// Booth/voter counts are read from /api/health rather than hardcoded, so this
+// suite runs unmodified against the real ~245k-elector roll or against a
+// small synthetic test dataset (see scripts/seed-synthetic-test-data.mjs).
+let TOTAL_BOOTHS = 0, TOTAL_LIVE_VOTERS = 0;
 section('Health');
 {
   const { status, data } = await api('GET', '/api/health');
   check('health returns ok', status === 200 && data.status === 'ok');
   check('electoral roll is loaded', data?.counts?.liveVoters > 0, `got ${data?.counts?.liveVoters}`);
-  check('polling booths are loaded', data?.counts?.booths === 318, `got ${data?.counts?.booths}`);
+  TOTAL_BOOTHS = data?.counts?.booths ?? 0;
+  TOTAL_LIVE_VOTERS = data?.counts?.liveVoters ?? 0;
+  check('polling booths are loaded', TOTAL_BOOTHS > 0, `got ${TOTAL_BOOTHS}`);
   check('constituency is reported', !!data?.constituency?.acNo);
 }
 
@@ -111,7 +117,7 @@ let a1Parts = [], a2Parts = [], a3Parts = [];
   const b3 = await api('GET', '/api/booths', { token: T3 });
   a1Parts = b1.data.parts; a2Parts = b2.data.parts; a3Parts = b3.data.parts;
 
-  check('A1 sees all 318 booths', b1.status === 200 && a1Parts.length === 318, `got ${a1Parts.length}`);
+  check('A1 sees all booths', b1.status === 200 && a1Parts.length === TOTAL_BOOTHS, `got ${a1Parts.length}, expected ${TOTAL_BOOTHS}`);
   check('A2 booth list is a strict subset', a2Parts.length > 0 && a2Parts.length < a1Parts.length, `A1=${a1Parts.length} A2=${a2Parts.length}`);
   check('A3 booth list is a strict subset of A2', a3Parts.length > 0 && a3Parts.length <= a2Parts.length, `A2=${a2Parts.length} A3=${a3Parts.length}`);
 
@@ -268,7 +274,7 @@ section('Voter directory & booth isolation');
 let a3Voter = null, outsideEpic = null;
 {
   const d1 = await api('GET', '/api/voters/directory?limit=10', { token: T1 });
-  check('A1 browses the full roll', d1.status === 200 && d1.data.total > 200000, `total=${d1.data.total}`);
+  check('A1 browses the full roll', d1.status === 200 && d1.data.total === TOTAL_LIVE_VOTERS, `total=${d1.data.total}, expected ${TOTAL_LIVE_VOTERS}`);
 
   const d2 = await api('GET', '/api/voters/directory?limit=10', { token: T2 });
   check('A2 directory is booth-scoped', d2.status === 200 && d2.data.total > 0 && d2.data.total < d1.data.total, `A1=${d1.data.total} A2=${d2.data.total}`);
@@ -467,7 +473,7 @@ let createdUserId = null;
   check('A3 cannot list users (403)', (await api('GET', '/api/users/list', { token: T3 })).status === 403);
 
   const j1 = await api('GET', '/api/users/jurisdictions', { token: T1 });
-  check('A1 can assign all 318 booths', j1.status === 200 && j1.data.parts.length === 318);
+  check('A1 can assign all booths', j1.status === 200 && j1.data.parts.length === TOTAL_BOOTHS, `got ${j1.data.parts.length}, expected ${TOTAL_BOOTHS}`);
   const j2 = await api('GET', '/api/users/jurisdictions', { token: T2 });
   check('A2 can only assign its own booths', j2.data.parts.length === a2Parts.length);
 

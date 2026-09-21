@@ -11,10 +11,20 @@ router.use(authenticate);
 
 const MOBILE_RE = /^[6-9]\d{9}$/;
 
+/**
+ * The pool in lib/db.js opens every MySQL session with `timezone: '+05:30'`,
+ * so NOW()/CURRENT_TIMESTAMP — and therefore every DATETIME this app writes,
+ * including last_seen_at — are IST wall-clock values, not UTC. dateStrings:
+ * true hands them back as plain "YYYY-MM-DD HH:MM:SS" strings with no offset
+ * marker, so they must be parsed as IST here to compare correctly against
+ * Date.now(). Treating them as UTC (e.g. appending "Z") silently shifts every
+ * comparison by 5.5 hours — which previously made every user register as
+ * offline all the time, however recently they were actually active.
+ */
 function isOnline(lastSeenAt) {
   if (!lastSeenAt) return false;
   const s = String(lastSeenAt);
-  const iso = s.includes('Z') || s.includes('+') ? s : s.replace(' ', 'T') + 'Z';
+  const iso = s.includes('Z') || /[+-]\d\d:\d\d$/.test(s) ? s : s.replace(' ', 'T') + '+05:30';
   return Math.abs(Date.now() - new Date(iso).getTime()) < ONLINE_WINDOW_MS;
 }
 

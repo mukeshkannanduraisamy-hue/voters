@@ -12,8 +12,8 @@ async function syncDb() {
   // When running with direct MySQL (the production architecture), SQLite sync is not needed.
   const isDirectMySQL = true; // Permanent direct MySQL architecture
   if (isDirectMySQL) {
-    const host = process.env.DB_HOST || 'srv1497.hstgr.io';
-    const dbName = process.env.DB_NAME || 'u403881955_ECL';
+    const host = process.env.DB_HOST || '(DB_HOST not set)';
+    const dbName = process.env.DB_NAME || '(DB_NAME not set)';
     console.log(`[sync-db] Direct MySQL mode active (${host}/${dbName}). Skipping SQLite download.`);
     return;
   }

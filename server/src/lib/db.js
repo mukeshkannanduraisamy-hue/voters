@@ -2,15 +2,16 @@ import mysql from 'mysql2/promise';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireEnv } from './env.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(__dirname, '../../../data');
 
-export const DB_HOST = process.env.DB_HOST || 'srv1497.hstgr.io';
-export const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10);
-export const DB_USER = process.env.DB_USER || 'u403881955_vms_admin';
-export const DB_PASSWORD = process.env.DB_PASSWORD || 'VmsAdmin#2026Secure';
-export const DB_NAME = process.env.DB_NAME || 'u403881955_vms';
+export const DB_HOST = requireEnv('DB_HOST');
+export const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10); // not a secret — the standard MySQL port is a safe default
+export const DB_USER = requireEnv('DB_USER');
+export const DB_PASSWORD = requireEnv('DB_PASSWORD');
+export const DB_NAME = requireEnv('DB_NAME');
 
 export const pool = mysql.createPool({
   host: DB_HOST,
@@ -171,23 +172,45 @@ export async function withTransaction(callback) {
   }
 }
 
+/**
+ * First-deployment bootstrap only: if the database has literally zero A1
+ * accounts, create exactly one with a random password so there is *some* way
+ * to log in and create real accounts. This never fires again once any A1
+ * exists — including the one it just created — so it can never reset or
+ * recreate an existing admin's password. The password is generated fresh
+ * every time this actually runs, logged once, and never stored in plaintext
+ * anywhere; log in immediately and set a real password via the profile page.
+ *
+ * Previously this unconditionally ensured a specific hardcoded mobile number
+ * existed with the hardcoded password "admin123" on every single startup —
+ * effectively a permanent, predictable backdoor. That mobile number's
+ * existing account and current password are untouched by this change; only
+ * the logic that could (re)create such an account going forward is fixed.
+ */
 export async function migrate() {
   console.log(`[db] Connected to MySQL (${DB_HOST}:${DB_PORT}/${DB_NAME})`);
-  // Ensure Super Admin exists
   try {
-    const [existing] = await poolQuery('SELECT id FROM vms_users WHERE mobile_number = ?', ['8144928022']);
-    if (!existing.length) {
+    const [admins] = await poolQuery("SELECT id FROM vms_users WHERE role = 'A1_SUPER_ADMIN' LIMIT 1");
+    if (!admins.length) {
+      const mobile = process.env.BOOTSTRAP_ADMIN_MOBILE || '9999999999';
+      const password = crypto.randomBytes(9).toString('base64url');
       const salt = crypto.randomBytes(16).toString('hex');
-      const derived = crypto.scryptSync('admin123', salt, 64).toString('hex');
+      const derived = crypto.scryptSync(password, salt, 64).toString('hex');
       const hash = 'scrypt$' + salt + '$' + derived;
       await poolQuery(
         'INSERT INTO vms_users (id, mobile_number, password_hash, role, full_name, is_active) VALUES (?, ?, ?, ?, ?, 1)',
-        [crypto.randomUUID(), '8144928022', hash, 'A1_SUPER_ADMIN', 'Super Admin']
+        [crypto.randomUUID(), mobile, hash, 'A1_SUPER_ADMIN', 'Super Admin']
       );
-      console.log('[db] Created initial Super Admin 8144928022 in MySQL.');
+      console.log('='.repeat(72));
+      console.log('[db] No Super Admin existed — created a one-time bootstrap account:');
+      console.log(`[db]   mobile:   ${mobile}`);
+      console.log(`[db]   password: ${password}`);
+      console.log('[db] Log in now and set a real password immediately — this one is not');
+      console.log('[db] stored anywhere else and will not be shown again.');
+      console.log('='.repeat(72));
     }
   } catch (e) {
-    console.warn('[db] Super admin check failed:', e.message);
+    console.warn('[db] Super admin bootstrap check failed:', e.message);
   }
 }
 

@@ -20,6 +20,28 @@ const SYSTEM_CATEGORIES = [
 const slugify = (s) => String(s).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
 
 /**
+ * Every field key that has ever bound to this master, across every schema
+ * version (draft, published and archived) — not just the currently-live one.
+ * An option's "is this in use?" check must scope by these keys: matching a
+ * survey answer's *value* against an item id alone is not enough, because
+ * field keys are reused as plain strings/numbers by unrelated fields (e.g. a
+ * text field holding "5" would otherwise look identical to master item id 5).
+ */
+async function fieldKeysBoundToMaster(masterKey) {
+  const schemas = await db.prepare('SELECT fields_json FROM vms_form_schemas').all();
+  const keys = new Set();
+  for (const s of schemas) {
+    let fields;
+    try { fields = JSON.parse(s.fields_json); } catch { continue; }
+    if (!Array.isArray(fields)) continue;
+    for (const f of fields) {
+      if (f?.source?.kind === 'master' && f.source.master === masterKey) keys.add(f.key);
+    }
+  }
+  return [...keys];
+}
+
+/**
  * GET /api/master-categories — every bindable lookup source.
  * A2 may read (their dropdowns and filters depend on it); only A1 may write.
  */
@@ -137,18 +159,25 @@ router.delete('/:id', requireRole(ROLES.A1), async (req, res, next) => {
     }
 
     // Separately: never delete a list that real survey answers still point at,
-    // or those records lose the ability to resolve what was recorded.
-    const used = await db.prepare(
-      `SELECT COUNT(*) c
-         FROM vms_survey_answers a
-         JOIN vms_master_items i ON i.category_id = ?
-        WHERE a.value = CAST(i.id AS CHAR)
-           OR a.value LIKE CONCAT('%"', i.id, '"%')`
-    ).get(id);
-    if (Number(used.c) > 0) {
+    // or those records lose the ability to resolve what was recorded. Scoped
+    // to the field keys that have ever bound to this master — see
+    // fieldKeysBoundToMaster's comment for why the value match alone isn't safe.
+    const boundKeys = await fieldKeysBoundToMaster(cat.cat_key);
+    let usedCount = 0;
+    if (boundKeys.length) {
+      const used = await db.prepare(
+        `SELECT COUNT(*) c
+           FROM vms_survey_answers a
+           JOIN vms_master_items i ON i.category_id = ?
+          WHERE a.field_key IN (${boundKeys.map(() => '?').join(',')})
+            AND (a.value = CAST(i.id AS CHAR) OR a.value LIKE CONCAT('%"', i.id, '"%'))`
+      ).get(id, ...boundKeys);
+      usedCount = Number(used.c) || 0;
+    }
+    if (usedCount > 0) {
       return res.status(409).json({
-        error: `${used.c} survey answer(s) still reference options in "${cat.name}". Deactivate the category instead so those records keep reading correctly.`,
-        usageCount: Number(used.c),
+        error: `${usedCount} survey answer(s) still reference options in "${cat.name}". Deactivate the category instead so those records keep reading correctly.`,
+        usageCount: usedCount,
       });
     }
 
@@ -245,14 +274,26 @@ router.delete('/items/:itemId', requireRole(ROLES.A1), async (req, res, next) =>
     const item = await db.prepare('SELECT * FROM vms_master_items WHERE id = ?').get(id);
     if (!item) return res.status(404).json({ error: 'Option not found' });
 
-    const used = await db.prepare(
-      `SELECT COUNT(*) c FROM vms_survey_answers WHERE value = ? OR value LIKE ?`
-    ).get(String(id), `%"${id}"%`);
+    // Scoped to the field keys actually bound to this item's category — see
+    // fieldKeysBoundToMaster's comment. Without that scope, an unrelated
+    // field whose answer happens to equal this item's numeric id would make
+    // the item look "in use" and block a perfectly safe delete.
+    const cat = await db.prepare('SELECT cat_key FROM vms_master_categories WHERE id = ?').get(item.category_id);
+    const boundKeys = cat ? await fieldKeysBoundToMaster(cat.cat_key) : [];
+    let usedCount = 0;
+    if (boundKeys.length) {
+      const used = await db.prepare(
+        `SELECT COUNT(*) c FROM vms_survey_answers
+          WHERE field_key IN (${boundKeys.map(() => '?').join(',')})
+            AND (value = ? OR value LIKE ?)`
+      ).get(...boundKeys, String(id), `%"${id}"%`);
+      usedCount = Number(used.c) || 0;
+    }
 
-    if (Number(used.c) > 0) {
+    if (usedCount > 0) {
       return res.status(409).json({
-        error: `${used.c} survey record(s) already recorded "${item.name}". Deactivate it instead so those records keep reading correctly.`,
-        usageCount: Number(used.c),
+        error: `${usedCount} survey record(s) already recorded "${item.name}". Deactivate it instead so those records keep reading correctly.`,
+        usageCount: usedCount,
       });
     }
 

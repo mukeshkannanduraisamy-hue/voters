@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { db } from './db.js';
+import { requireEnv } from './env.js';
 
-export const JWT_SECRET = process.env.VMS_JWT_SECRET || 'vms-dev-secret-change-in-production';
+export const JWT_SECRET = requireEnv('VMS_JWT_SECRET');
 export const JWT_TTL_SECONDS = Number(process.env.VMS_JWT_TTL_SECONDS) || 86400; // 24h
 export const COOKIE_NAME = 'vms_token';
 

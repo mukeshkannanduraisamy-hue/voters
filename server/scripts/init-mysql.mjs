@@ -1,11 +1,12 @@
 import mysql from 'mysql2/promise';
+import { requireEnv } from '../src/lib/env.js';
 
 const DB_CONFIG = {
-  host: process.env.DB_HOST || 'srv1497.hstgr.io',
+  host: requireEnv('DB_HOST'),
   port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'u403881955_vms_admin',
-  password: process.env.DB_PASSWORD || 'VmsAdmin#2026Secure',
-  database: process.env.DB_NAME || 'u403881955_vms',
+  user: requireEnv('DB_USER'),
+  password: requireEnv('DB_PASSWORD'),
+  database: requireEnv('DB_NAME'),
 };
 
 const DDL_STATEMENTS = [
@@ -152,6 +153,7 @@ const DDL_STATEMENTS = [
     job_id                      BIGINT NULL,
     party_id                    BIGINT NULL,
     education_id                BIGINT NULL,
+    job_type                    VARCHAR(32),
     other_job_text              VARCHAR(255),
     remarks                     TEXT,
     surveyed_by                 CHAR(36) NULL,
@@ -196,6 +198,23 @@ async function init() {
     const tableName = sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1];
     console.log(`[init-mysql] Creating table ${tableName}...`);
     await conn.query(sql);
+  }
+
+  // Columns added to an existing table after its CREATE TABLE statement above
+  // was first deployed. CREATE TABLE IF NOT EXISTS is a no-op on a table that
+  // already exists, so these ALTERs are what actually bring an older database
+  // up to date — each one guarded so this script stays safe to re-run.
+  const COLUMN_MIGRATIONS = [
+    { table: 'vms_voter_surveys', column: 'job_type', ddl: 'ADD COLUMN job_type VARCHAR(32) AFTER education_id' },
+  ];
+  for (const { table, column, ddl } of COLUMN_MIGRATIONS) {
+    const [existing] = await conn.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
+      [DB_CONFIG.database, table, column]
+    );
+    if (existing.length) continue;
+    console.log(`[init-mysql] Adding missing column ${table}.${column}...`);
+    await conn.query(`ALTER TABLE ${table} ${ddl}`);
   }
 
   const [tables] = await conn.query("SHOW TABLES LIKE 'vms_%'");

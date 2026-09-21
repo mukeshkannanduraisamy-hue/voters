@@ -1,11 +1,12 @@
 import mysql from 'mysql2/promise';
+import { requireEnv } from '../src/lib/env.js';
 
 const DB_CONFIG = {
-  host: process.env.DB_HOST || 'srv1497.hstgr.io',
+  host: requireEnv('DB_HOST'),
   port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'u403881955_vms_admin',
-  password: process.env.DB_PASSWORD || 'VmsAdmin#2026Secure',
-  database: process.env.DB_NAME || 'u403881955_vms',
+  user: requireEnv('DB_USER'),
+  password: requireEnv('DB_PASSWORD'),
+  database: requireEnv('DB_NAME'),
   waitForConnections: true,
   connectionLimit: 5,
   maxIdle: 3,

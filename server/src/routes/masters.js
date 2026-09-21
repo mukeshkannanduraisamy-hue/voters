@@ -245,8 +245,12 @@ router.get('/job', requireRole(ROLES.A1), async (req, res, next) => {
 
 router.get('/job/sectors', requireRole(ROLES.A1), async (req, res, next) => {
   try {
+    // ANY_VALUE(): category_ta is functionally dependent on category (every row
+    // in a sector shares the same Tamil name) but MySQL's default
+    // ONLY_FULL_GROUP_BY mode can't prove that from the schema alone and
+    // rejects a bare `category_ta` in the SELECT list of a GROUP BY category.
     const sectors = await db.prepare(
-      `SELECT category, category_ta, COUNT(*) AS job_count
+      `SELECT category, ANY_VALUE(category_ta) AS category_ta, COUNT(*) AS job_count
          FROM job_master GROUP BY category ORDER BY category`
     ).all();
     res.json(sectors);

@@ -126,12 +126,6 @@ async function main() {
     epic: epic0.epic_id, name: 'Super Admin',
   });
 
-  const epic4 = await pickEpic(4);
-  const a1_mukesh = await upsertUser({
-    mobile: '8144928022', password: 'admin123', role: ROLES.A1,
-    epic: epic4.epic_id, name: 'Super Admin',
-  });
-
   const partsRows = await db.prepare('SELECT part_no FROM polling_parts ORDER BY part_no LIMIT 10').all();
   const firstTen = partsRows.map((r) => r.part_no);
 
