@@ -77,7 +77,7 @@ router.get('/caste', requireRole(ROLES.A1), async (req, res, next) => {
   }
 });
 
-router.post('/caste', requireRole(ROLES.A1), async (req, res, next) => {
+router.post('/caste', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (req, res, next) => {
   try {
     const name = String(req.body?.name ?? '').trim();
     const nameTa = String(req.body?.name_ta ?? '').trim() || null;
@@ -86,9 +86,21 @@ router.post('/caste', requireRole(ROLES.A1), async (req, res, next) => {
     const isActive = req.body?.is_active === false ? 0 : 1;
 
     if (name.length < 2) return res.status(400).json({ error: 'Caste name must be at least 2 characters', fields: { name: 'Too short' } });
-    const existing = await db.prepare('SELECT 1 FROM caste_master WHERE name = ? COLLATE NOCASE').get(name);
+    const existing = await db.prepare('SELECT id, name, name_ta, category, is_active FROM caste_master WHERE name = ? COLLATE NOCASE').get(name);
     if (existing) {
-      return res.status(409).json({ error: `"${name}" already exists`, fields: { name: 'Already exists' } });
+      if (!existing.is_active) {
+        await db.prepare('UPDATE caste_master SET is_active = 1 WHERE id = ?').run(existing.id);
+      }
+      return res.status(409).json({
+        error: `"${name}" already exists`,
+        fields: { name: 'Already exists' },
+        existing: {
+          id: Number(existing.id),
+          name: existing.name,
+          name_ta: existing.name_ta,
+          category: existing.category,
+        },
+      });
     }
 
     const info = await db.prepare('INSERT INTO caste_master (name, name_ta, category, is_active) VALUES (?,?,?,?)')
@@ -99,6 +111,7 @@ router.post('/caste', requireRole(ROLES.A1), async (req, res, next) => {
     next(err);
   }
 });
+
 
 router.patch('/caste/:id', requireRole(ROLES.A1), async (req, res, next) => {
   try {

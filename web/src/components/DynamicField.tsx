@@ -1,11 +1,141 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, setMutationHandler } from '../lib/api';
+import { api, ApiError, setMutationHandler } from '../lib/api';
 import {
-  Alert, Field, Input, PhoneInput, Select, Switch, Textarea,
+  Alert, Button, Field, Input, Modal, PhoneInput, Select, Switch, Textarea, useToast,
 } from './ui';
 import { CollapsiblePartyPicker, PartyGrid } from './spec-ui';
 import type { AnswerMap, FieldOption, FormField } from '../lib/formSchema';
 import { isMulti, isOthersSector, isVisible, OTHER_TEXT_FIELDS } from '../lib/formSchema';
+
+function AddCasteModal({
+  open,
+  onClose,
+  onAdded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdded: (opt: FieldOption) => void;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [nameTa, setNameTa] = useState('');
+  const [category, setCategory] = useState('OTHER');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setError('Caste name must be at least 2 characters');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.post<{
+        id: number;
+        name: string;
+        name_ta: string | null;
+        category: string;
+      }>('/api/masters/caste', {
+        name: trimmed,
+        name_ta: nameTa.trim() || null,
+        category: category || 'OTHER',
+      });
+      clearOptionCache();
+      const newOpt: FieldOption = {
+        value: String(res.id),
+        label: res.name,
+        labelTa: res.name_ta,
+        group: res.category,
+      };
+      onAdded(newOpt);
+      toast.ok('Caste added', `"${res.name}" added to master data and selected.`);
+      setName('');
+      setNameTa('');
+      setCategory('OTHER');
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existing = (err as any).existing;
+        if (existing?.id) {
+          const opt: FieldOption = {
+            value: String(existing.id),
+            label: existing.name,
+            labelTa: existing.name_ta,
+            group: existing.category,
+          };
+          onAdded(opt);
+          toast.info('Caste selected', `"${existing.name}" already exists in master data and has been selected.`);
+          setName('');
+          setNameTa('');
+          setCategory('OTHER');
+          onClose();
+          return;
+        }
+      }
+      setError(err instanceof Error ? err.message : 'Failed to add caste to master data');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title="Add Caste / Community to Master Data"
+      icon="plus"
+      onClose={onClose}
+      footer={
+        <>
+          <Button type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" variant="primary" icon="save" loading={saving} onClick={submit}>
+            Save to Master & Select
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="stack" style={{ gap: '14px' }}>
+        {error && <Alert tone="bad">{error}</Alert>}
+        <Field label="Caste / Community name (English)" required>
+          <Input
+            value={name}
+            autoFocus
+            placeholder="e.g. Vanniyar, Nadar, etc."
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError('');
+            }}
+          />
+        </Field>
+        <Field label="Reservation category">
+          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="OTHER">OTHER / General</option>
+            <option value="BC">BC (Backward Class)</option>
+            <option value="MBC">MBC (Most Backward Class)</option>
+            <option value="BCM">BCM (Backward Class Muslim)</option>
+            <option value="SC">SC (Scheduled Caste)</option>
+            <option value="ST">ST (Scheduled Tribe)</option>
+            <option value="OC">OC (Open Competition)</option>
+          </Select>
+        </Field>
+        <Field label="Tamil name (Optional)">
+          <Input
+            value={nameTa}
+            className="ta"
+            placeholder="e.g. வன்னியர், நாடார்..."
+            onChange={(e) => setNameTa(e.target.value)}
+          />
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
 
 /* ------------------------------------------------------------------ options */
 /**
@@ -113,10 +243,28 @@ export function DynamicField({
   onPickContact?: () => void;
   pickingContact?: boolean;
 }) {
-  const allOptions = useFieldOptions(field);
+  const remoteOptions = useFieldOptions(field);
+  const [extraOptions, setExtraOptions] = useState<FieldOption[]>([]);
+  const [addCasteOpen, setAddCasteOpen] = useState(false);
+  const isCasteField = field.bind === 'caste_id' || field.key === 'caste_id' || (field.source?.kind === 'master' && field.source.master === 'caste');
+
+  const allOptions = useMemo(() => {
+    if (!extraOptions.length) return remoteOptions;
+    const seen = new Set(remoteOptions.map((o) => o.value));
+    const merged = [...remoteOptions];
+    for (const eo of extraOptions) {
+      if (!seen.has(eo.value)) {
+        seen.add(eo.value);
+        merged.push(eo);
+      }
+    }
+    return merged;
+  }, [remoteOptions, extraOptions]);
+
   if (field.source?.kind === 'master' && field.source.master && allOptions.length > 0) {
     cachedOptionsByMaster.set(field.source.master, allOptions);
   }
+
 
   const parentKey = field.source?.parentField;
   const parentValue = parentKey ? String(values[parentKey] ?? '') : '';
@@ -317,17 +465,60 @@ export function DynamicField({
           : isSectorOthers
           ? 'Others'
           : (placeholder ?? 'Select…');
-        return (
+
+        const selectElement = (
           <Select
             value={str}
             disabled={isDisabled}
             invalid={!!err}
-            onChange={(e) => onChange(field.key, e.target.value)}
+            onChange={(e) => {
+              if (e.target.value === '__add_new_caste__') {
+                setAddCasteOpen(true);
+                return;
+              }
+              onChange(field.key, e.target.value);
+            }}
           >
             <option value="">{placeholderText}</option>
             {options.map((o) => <option key={o.value} value={o.value}>{optLabel(o)}</option>)}
+            {isCasteField && (
+              <option value="__add_new_caste__">➕ + Add new caste / community…</option>
+            )}
           </Select>
         );
+
+        if (isCasteField) {
+          return (
+            <>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {selectElement}
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  icon="plus"
+                  onClick={() => setAddCasteOpen(true)}
+                  title="Add new caste to master data"
+                  style={{ height: '38px', padding: '0 12px', whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  Add
+                </Button>
+              </div>
+              <AddCasteModal
+                open={addCasteOpen}
+                onClose={() => setAddCasteOpen(false)}
+                onAdded={(newOpt) => {
+                  setExtraOptions((prev) => [...prev, newOpt]);
+                  onChange(field.key, String(newOpt.value));
+                }}
+              />
+            </>
+          );
+        }
+
+        return selectElement;
       }
 
       case 'radio': {
