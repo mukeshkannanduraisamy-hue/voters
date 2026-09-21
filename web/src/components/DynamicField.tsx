@@ -18,8 +18,6 @@ function AddCasteModal({
 }) {
   const toast = useToast();
   const [name, setName] = useState('');
-  const [nameTa, setNameTa] = useState('');
-  const [category, setCategory] = useState('OTHER');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,8 +38,7 @@ function AddCasteModal({
         category: string;
       }>('/api/masters/caste', {
         name: trimmed,
-        name_ta: nameTa.trim() || null,
-        category: category || 'OTHER',
+        category: 'OTHER',
       });
       clearOptionCache();
       const newOpt: FieldOption = {
@@ -53,8 +50,6 @@ function AddCasteModal({
       onAdded(newOpt);
       toast.ok('Caste added', `"${res.name}" added to master data and selected.`);
       setName('');
-      setNameTa('');
-      setCategory('OTHER');
       onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
@@ -70,8 +65,6 @@ function AddCasteModal({
           onAdded(opt);
           toast.info('Caste selected', `"${existing.name}" already exists in master data and has been selected.`);
           setName('');
-          setNameTa('');
-          setCategory('OTHER');
           onClose();
           return;
         }
@@ -85,7 +78,7 @@ function AddCasteModal({
   return (
     <Modal
       open={open}
-      title="Add Caste / Community to Master Data"
+      title="Add Caste / Community"
       icon="plus"
       onClose={onClose}
       footer={
@@ -94,14 +87,14 @@ function AddCasteModal({
             Cancel
           </Button>
           <Button type="button" variant="primary" icon="save" loading={saving} onClick={submit}>
-            Save to Master & Select
+            Save & Select
           </Button>
         </>
       }
     >
       <form onSubmit={submit} className="stack" style={{ gap: '14px' }}>
         {error && <Alert tone="bad">{error}</Alert>}
-        <Field label="Caste / Community name (English)" required>
+        <Field label="Caste / Community name" required>
           <Input
             value={name}
             autoFocus
@@ -110,25 +103,6 @@ function AddCasteModal({
               setName(e.target.value);
               if (error) setError('');
             }}
-          />
-        </Field>
-        <Field label="Reservation category">
-          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="OTHER">OTHER / General</option>
-            <option value="BC">BC (Backward Class)</option>
-            <option value="MBC">MBC (Most Backward Class)</option>
-            <option value="BCM">BCM (Backward Class Muslim)</option>
-            <option value="SC">SC (Scheduled Caste)</option>
-            <option value="ST">ST (Scheduled Tribe)</option>
-            <option value="OC">OC (Open Competition)</option>
-          </Select>
-        </Field>
-        <Field label="Tamil name (Optional)">
-          <Input
-            value={nameTa}
-            className="ta"
-            placeholder="e.g. வன்னியர், நாடார்..."
-            onChange={(e) => setNameTa(e.target.value)}
           />
         </Field>
       </form>
