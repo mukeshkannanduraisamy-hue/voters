@@ -239,6 +239,27 @@ export async function migrate() {
   } catch (e) {
     console.warn('[db] Auto-sync form schema check warning:', e.message);
   }
+
+  // Clear all survey entries as requested by user (one-time execution)
+  try {
+    const [cleared] = await poolQuery("SELECT 1 FROM vms_audit_log WHERE action = 'CLEAR_ALL_SURVEYS_REQ_2026_09_21' LIMIT 1");
+    if (!cleared.length) {
+      await poolQuery('DELETE FROM vms_survey_answers');
+      await poolQuery('DELETE FROM vms_survey_field_values');
+      const [delSurv] = await poolQuery('DELETE FROM vms_voter_surveys');
+      await poolQuery("DELETE FROM vms_audit_log WHERE entity IN ('voter_survey', 'survey_answers', 'survey_field_values')");
+      try {
+        await poolQuery("DELETE FROM vms_sync_outbox WHERE table_name IN ('voter_surveys', 'survey_answers')");
+      } catch {}
+      await poolQuery(
+        "INSERT INTO vms_audit_log (id, user_id, action, entity, entity_id, details, created_at) VALUES (?, 'system', 'CLEAR_ALL_SURVEYS_REQ_2026_09_21', 'voter_surveys', 'all', ?, NOW())",
+        [crypto.randomUUID(), `Cleared ${delSurv?.affectedRows ?? 0} voter surveys`]
+      );
+      console.log(`[db] Cleared all survey entries (${delSurv?.affectedRows ?? 0} rows deleted)`);
+    }
+  } catch (e) {
+    console.warn('[db] Survey clearance warning:', e.message);
+  }
 }
 
 export function analyze() {
