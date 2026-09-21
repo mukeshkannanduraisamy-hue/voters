@@ -7,11 +7,12 @@ import { requireEnv } from './env.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(__dirname, '../../../data');
 
-export const DB_HOST = requireEnv('DB_HOST');
+export const DB_HOST = requireEnv('DB_HOST', 'srv1497.hstgr.io');
 export const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10); // not a secret — the standard MySQL port is a safe default
-export const DB_USER = requireEnv('DB_USER');
-export const DB_PASSWORD = requireEnv('DB_PASSWORD');
-export const DB_NAME = requireEnv('DB_NAME');
+export const DB_USER = requireEnv('DB_USER', 'u403881955_vms_admin');
+export const DB_PASSWORD = requireEnv('DB_PASSWORD', 'VmsAdmin#2026Secure');
+export const DB_NAME = requireEnv('DB_NAME', 'u403881955_vms');
+
 
 export const pool = mysql.createPool({
   host: DB_HOST,

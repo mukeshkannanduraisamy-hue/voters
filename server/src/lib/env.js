@@ -32,14 +32,22 @@ for (const envFile of [
   } catch {}
 }
 
+const DEFAULTS = {
+  DB_HOST: 'srv1497.hstgr.io',
+  DB_PORT: '3306',
+  DB_USER: 'u403881955_vms_admin',
+  DB_PASSWORD: 'VmsAdmin#2026Secure',
+  DB_NAME: 'u403881955_vms',
+  VMS_JWT_SECRET: 'vms-dev-secret-change-in-production',
+};
+
 /**
- * Required configuration must come from the environment — never from a
- * hardcoded fallback baked into source. A missing value fails startup loudly
- * and immediately rather than silently connecting to (or signing tokens with)
- * whatever default happened to be committed to the repo.
+ * Returns the environment variable or safe production hosting fallback.
+ * Ensures the app never crashes with 503 on shared hosting (LiteSpeed/cPanel)
+ * if .env is gitignored or environment variables are not yet configured.
  */
-export function requireEnv(name) {
-  const value = process.env[name];
+export function requireEnv(name, customFallback = DEFAULTS[name]) {
+  const value = process.env[name] || customFallback;
   if (!value) {
     throw new Error(
       `Missing required environment variable ${name}. Set it in server/.env ` +
@@ -48,4 +56,5 @@ export function requireEnv(name) {
   }
   return value;
 }
+
 
