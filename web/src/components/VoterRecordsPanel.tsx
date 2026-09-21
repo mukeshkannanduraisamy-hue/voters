@@ -401,7 +401,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
             <div className="locked-grid">
               <Cell k="Phone number" v={s.phoneNumber} mono />
               <Cell k="Caste / community" v={`${s.casteNameTa ?? s.casteName ?? '—'}${s.casteCategory ? ` (${s.casteCategory})` : ''}`} ta />
-              <Cell k="Occupation sector" v={s.jobCategoryTa ?? s.jobCategory ?? '—'} ta />
+              {s.jobCategory && s.jobCategory !== 'General' && <Cell k="Occupation sector" v={s.jobCategoryTa ?? s.jobCategory} ta />}
               <Cell k="Occupation" v={s.jobNameTa ?? s.jobName ?? '—'} ta />
               {s.jobType && <Cell k="Job type" v={s.jobType} />}
               {s.otherJobText && <Cell k="Custom job note" v={s.otherJobText} span2 ta />}

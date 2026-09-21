@@ -169,16 +169,23 @@ router.get('/education', requireRole(ROLES.A1), async (req, res, next) => {
   }
 });
 
-router.post('/education', requireRole(ROLES.A1), async (req, res, next) => {
+router.post('/education', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (req, res, next) => {
   try {
     const name = String(req.body?.name ?? '').trim();
     const nameTa = String(req.body?.name_ta ?? '').trim() || null;
     const isActive = req.body?.is_active === false ? 0 : 1;
 
     if (name.length < 2) return res.status(400).json({ error: 'Education level name must be at least 2 characters', fields: { name: 'Too short' } });
-    const existing = await db.prepare('SELECT 1 FROM education_master WHERE name = ? COLLATE NOCASE').get(name);
+    const existing = await db.prepare('SELECT id, name, name_ta, is_active FROM education_master WHERE name = ? COLLATE NOCASE').get(name);
     if (existing) {
-      return res.status(409).json({ error: `"${name}" already exists`, fields: { name: 'Already exists' } });
+      if (!existing.is_active) {
+        await db.prepare('UPDATE education_master SET is_active = 1 WHERE id = ?').run(existing.id);
+      }
+      return res.status(409).json({
+        error: `"${name}" already exists in master data`,
+        fields: { name: 'Already exists' },
+        existing: { id: existing.id, name: existing.name, name_ta: existing.name_ta },
+      });
     }
 
     const info = await db.prepare('INSERT INTO education_master (name, name_ta, is_active) VALUES (?,?,?)').run(name, nameTa, isActive);
@@ -314,28 +321,37 @@ router.delete('/job/sector/:category', requireRole(ROLES.A1), async (req, res, n
   }
 });
 
-router.post('/job', requireRole(ROLES.A1), async (req, res, next) => {
+router.post('/job', requireRole(ROLES.A1, ROLES.A2, ROLES.A3), async (req, res, next) => {
   try {
-    const category = String(req.body?.category ?? '').trim();
+    let category = String(req.body?.category ?? '').trim();
     const categoryTa = String(req.body?.category_ta ?? '').trim() || null;
     let name = String(req.body?.name ?? '').trim();
     let nameTa = String(req.body?.name_ta ?? '').trim() || null;
     const isActive = req.body?.is_active === false ? 0 : 1;
 
-    const fields = {};
-    if (!category) fields.category = 'Choose or enter a sector';
-    // Sub-job name is optional — defaults to nameTa, category or sector
-    if (!name) {
-      name = nameTa || category;
+    if (!name && !nameTa) {
+      return res.status(400).json({ error: 'Occupation name must be at least 2 characters', fields: { name: 'Too short' } });
     }
-    if (!nameTa && categoryTa) {
-      nameTa = categoryTa;
+    if (!name) name = nameTa;
+    if (name.length < 2) {
+      return res.status(400).json({ error: 'Occupation name must be at least 2 characters', fields: { name: 'Too short' } });
     }
-    if (Object.keys(fields).length) return res.status(400).json({ error: 'Please correct the highlighted fields', fields });
+    if (!category) {
+      category = 'General';
+    }
 
-    const existing = await db.prepare('SELECT 1 FROM job_master WHERE category = ? AND name = ? COLLATE NOCASE').get(category, name);
+    const existing = await db.prepare(
+      'SELECT id, category, name, name_ta, is_active FROM job_master WHERE (name = ? OR (category = ? AND name = ?)) COLLATE NOCASE'
+    ).get(name, category, name);
     if (existing) {
-      return res.status(409).json({ error: `"${name}" already exists in ${category}`, fields: { name: 'Already exists in this sector' } });
+      if (!existing.is_active) {
+        await db.prepare('UPDATE job_master SET is_active = 1 WHERE id = ?').run(existing.id);
+      }
+      return res.status(409).json({
+        error: `"${name}" already exists in master data`,
+        fields: { name: 'Already exists' },
+        existing: { id: existing.id, category: existing.category, name: existing.name, name_ta: existing.name_ta },
+      });
     }
 
     const info = await db.prepare('INSERT INTO job_master (category, category_ta, name, name_ta, is_active) VALUES (?,?,?,?,?)')

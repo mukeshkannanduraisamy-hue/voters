@@ -253,8 +253,13 @@ export async function resolveMasterOptions(masterKey) {
 
     case 'job':
       return (await db.prepare(
-        `SELECT id, name, name_ta, category FROM job_master WHERE is_active = 1 ORDER BY category, name`
-      ).all()).map((r) => ({ value: String(r.id), label: r.name, labelTa: r.name_ta, parent: r.category }));
+        `SELECT id, name, name_ta, category FROM job_master WHERE is_active = 1 ORDER BY name, category`
+      ).all()).map((r) => ({
+        value: String(r.id),
+        label: r.name || r.name_ta || r.category,
+        labelTa: r.name_ta,
+        parent: r.category,
+      }));
 
     case 'job_sector':
       return (await db.prepare(

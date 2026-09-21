@@ -71,20 +71,9 @@ export const DEFAULT_FIELDS = [
     },
   },
   {
-    key: 'job_sector', type: 'select', bind: null, width: 'half', active: true, required: false,
-    label: 'Occupation sector', labelTa: 'தொழில் துறை',
-    source: { kind: 'master', master: 'job_sector' },
-    transient: true, // a filter for job_id below; not stored as an answer
-  },
-  {
-    key: 'job_id', type: 'select', bind: 'job_id', width: 'half', active: true, required: false,
-    label: 'Specific sub-job', labelTa: 'குறிப்பிட்ட வேலை',
-    source: { kind: 'master', master: 'job', parentField: 'job_sector' },
-  },
-  {
-    key: 'other_job_text', type: 'text', bind: 'other_job_text', width: 'full', active: true, required: false,
-    label: 'Custom job note', labelTa: 'தனிப்பயன் வேலை குறிப்பு',
-    placeholder: 'e.g. Silk rearing',
+    key: 'job_id', type: 'select', bind: 'job_id', width: 'full', active: true, required: false,
+    label: 'Occupation', labelTa: 'தொழில்',
+    source: { kind: 'master', master: 'job' },
   },
   {
     key: 'party_id', type: 'party', bind: 'party_id', width: 'full', active: true, required: false,

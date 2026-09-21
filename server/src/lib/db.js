@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireEnv } from './env.js';
+import { DEFAULT_FIELDS } from './formDefaults.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(__dirname, '../../../data');
@@ -212,6 +213,31 @@ export async function migrate() {
     }
   } catch (e) {
     console.warn('[db] Super admin bootstrap check failed:', e.message);
+  }
+
+  try {
+    const [pubRows] = await poolQuery("SELECT id, version, fields_json FROM vms_form_schemas WHERE status = 'published' ORDER BY version DESC LIMIT 1");
+    if (pubRows && pubRows.length > 0) {
+      const fields = JSON.parse(pubRows[0].fields_json || '[]');
+      const needsUpdate = fields.some((f) => f.key === 'job_sector' || f.key === 'other_job_text' || (f.key === 'job_id' && (f.source?.parentField || f.label === 'Specific sub-job')));
+      if (needsUpdate) {
+        const [maxRows] = await poolQuery('SELECT COALESCE(MAX(version), 0) AS v FROM vms_form_schemas');
+        const nextVer = Number(maxRows[0]?.v ?? 0) + 1;
+        await poolQuery("UPDATE vms_form_schemas SET status = 'archived' WHERE status = 'published'");
+        await poolQuery(
+          `INSERT INTO vms_form_schemas (version, status, title, title_ta, fields_json, change_summary, published_at)
+           VALUES (?, 'published', 'Voter Field Survey', 'வாக்காளர் கள கணக்கெடுப்பு', ?, 'Simplified Occupation: removed sub-job and custom job note, streamlined Education & Occupation dropdowns', NOW())`,
+          [nextVer, JSON.stringify(DEFAULT_FIELDS)]
+        );
+        await poolQuery(
+          "UPDATE vms_form_schemas SET fields_json = ? WHERE version = 0",
+          [JSON.stringify(DEFAULT_FIELDS)]
+        );
+        console.log(`[db] Form schema auto-updated to v${nextVer}: simplified Occupation, removed sub-job and custom job note`);
+      }
+    }
+  } catch (e) {
+    console.warn('[db] Auto-sync form schema check warning:', e.message);
   }
 }
 

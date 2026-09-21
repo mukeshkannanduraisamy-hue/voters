@@ -110,6 +110,208 @@ function AddCasteModal({
   );
 }
 
+function AddEducationModal({
+  open,
+  onClose,
+  onAdded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdded: (opt: FieldOption) => void;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setError('Education level name must be at least 2 characters');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.post<{
+        id: number;
+        name: string;
+        name_ta: string | null;
+      }>('/api/masters/education', {
+        name: trimmed,
+      });
+      clearOptionCache();
+      const newOpt: FieldOption = {
+        value: String(res.id),
+        label: res.name,
+        labelTa: res.name_ta,
+      };
+      onAdded(newOpt);
+      toast.ok('Education added', `"${res.name}" added to master data and selected.`);
+      setName('');
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existing = (err as any).existing;
+        if (existing?.id) {
+          const opt: FieldOption = {
+            value: String(existing.id),
+            label: existing.name,
+            labelTa: existing.name_ta,
+          };
+          onAdded(opt);
+          toast.info('Education selected', `"${existing.name}" already exists in master data and has been selected.`);
+          setName('');
+          onClose();
+          return;
+        }
+      }
+      setError(err instanceof Error ? err.message : 'Failed to add education to master data');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title="Add Education Level"
+      icon="plus"
+      onClose={onClose}
+      footer={
+        <>
+          <Button type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" variant="primary" icon="save" loading={saving} onClick={submit}>
+            Save & Select
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="stack" style={{ gap: '14px' }}>
+        {error && <Alert tone="bad">{error}</Alert>}
+        <Field label="Education level name" required>
+          <Input
+            value={name}
+            autoFocus
+            placeholder="e.g. B.E, 10th, 12th, M.Sc, etc."
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError('');
+            }}
+          />
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
+function AddOccupationModal({
+  open,
+  onClose,
+  onAdded,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdded: (opt: FieldOption) => void;
+}) {
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = name.trim();
+    if (trimmed.length < 2) {
+      setError('Occupation name must be at least 2 characters');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.post<{
+        id: number;
+        name: string;
+        name_ta: string | null;
+        category: string;
+      }>('/api/masters/job', {
+        name: trimmed,
+        category: 'General',
+      });
+      clearOptionCache();
+      const newOpt: FieldOption = {
+        value: String(res.id),
+        label: res.name,
+        labelTa: res.name_ta,
+        group: res.category,
+      };
+      onAdded(newOpt);
+      toast.ok('Occupation added', `"${res.name}" added to master data and selected.`);
+      setName('');
+      onClose();
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existing = (err as any).existing;
+        if (existing?.id) {
+          const opt: FieldOption = {
+            value: String(existing.id),
+            label: existing.name,
+            labelTa: existing.name_ta,
+            group: existing.category,
+          };
+          onAdded(opt);
+          toast.info('Occupation selected', `"${existing.name}" already exists in master data and has been selected.`);
+          setName('');
+          onClose();
+          return;
+        }
+      }
+      setError(err instanceof Error ? err.message : 'Failed to add occupation to master data');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      title="Add Occupation"
+      icon="plus"
+      onClose={onClose}
+      footer={
+        <>
+          <Button type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" variant="primary" icon="save" loading={saving} onClick={submit}>
+            Save & Select
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="stack" style={{ gap: '14px' }}>
+        {error && <Alert tone="bad">{error}</Alert>}
+        <Field label="Occupation name" required>
+          <Input
+            value={name}
+            autoFocus
+            placeholder="e.g. Farmer, Electrician, Teacher, Driver, etc."
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError('');
+            }}
+          />
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
 
 /* ------------------------------------------------------------------ options */
 /**
@@ -219,8 +421,12 @@ export function DynamicField({
 }) {
   const remoteOptions = useFieldOptions(field);
   const [extraOptions, setExtraOptions] = useState<FieldOption[]>([]);
-  const [addCasteOpen, setAddCasteOpen] = useState(false);
   const isCasteField = field.bind === 'caste_id' || field.key === 'caste_id' || (field.source?.kind === 'master' && field.source.master === 'caste');
+  const isEducationField = field.bind === 'education_id' || field.key === 'education_id' || (field.source?.kind === 'master' && field.source.master === 'education');
+  const isOccupationField = field.bind === 'job_id' || field.key === 'job_id' || (field.source?.kind === 'master' && field.source.master === 'job');
+  const [addCasteOpen, setAddCasteOpen] = useState(false);
+  const [addEducationOpen, setAddEducationOpen] = useState(false);
+  const [addOccupationOpen, setAddOccupationOpen] = useState(false);
 
   const allOptions = useMemo(() => {
     if (!extraOptions.length) return remoteOptions;
@@ -240,7 +446,7 @@ export function DynamicField({
   }
 
 
-  const parentKey = field.source?.parentField;
+  const parentKey = isOccupationField ? undefined : field.source?.parentField;
   const parentValue = parentKey ? String(values[parentKey] ?? '') : '';
   const isParentMissing = Boolean(parentKey && !parentValue);
 
@@ -432,7 +638,7 @@ export function DynamicField({
 
       case 'select': {
         const isJobSubField = field.bind === 'job_id' || field.key === 'job_id';
-        const isSectorOthers = isJobSubField && isOthersSector(parentValue);
+        const isSectorOthers = !isOccupationField && isJobSubField && isOthersSector(parentValue);
         const isDisabled = isParentMissing || isSectorOthers;
         const placeholderText = isParentMissing
           ? 'Select occupation sector first…'
@@ -450,6 +656,14 @@ export function DynamicField({
                 setAddCasteOpen(true);
                 return;
               }
+              if (e.target.value === '__add_new_education__') {
+                setAddEducationOpen(true);
+                return;
+              }
+              if (e.target.value === '__add_new_occupation__') {
+                setAddOccupationOpen(true);
+                return;
+              }
               onChange(field.key, e.target.value);
             }}
           >
@@ -458,10 +672,27 @@ export function DynamicField({
             {isCasteField && (
               <option value="__add_new_caste__">➕ + Add new caste / community…</option>
             )}
+            {isEducationField && (
+              <option value="__add_new_education__">➕ + Add new education…</option>
+            )}
+            {isOccupationField && (
+              <option value="__add_new_occupation__">➕ + Add new occupation…</option>
+            )}
           </Select>
         );
 
-        if (isCasteField) {
+        if (isCasteField || isEducationField || isOccupationField) {
+          const quickAddAction = () => {
+            if (isCasteField) setAddCasteOpen(true);
+            else if (isEducationField) setAddEducationOpen(true);
+            else if (isOccupationField) setAddOccupationOpen(true);
+          };
+          const quickAddTitle = isCasteField
+            ? 'Add new caste to master data'
+            : isEducationField
+            ? 'Add new education level to master data'
+            : 'Add new occupation to master data';
+
           return (
             <>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -473,21 +704,43 @@ export function DynamicField({
                   variant="secondary"
                   size="sm"
                   icon="plus"
-                  onClick={() => setAddCasteOpen(true)}
-                  title="Add new caste to master data"
+                  onClick={quickAddAction}
+                  title={quickAddTitle}
                   style={{ height: '38px', padding: '0 12px', whiteSpace: 'nowrap', flexShrink: 0 }}
                 >
                   Add
                 </Button>
               </div>
-              <AddCasteModal
-                open={addCasteOpen}
-                onClose={() => setAddCasteOpen(false)}
-                onAdded={(newOpt) => {
-                  setExtraOptions((prev) => [...prev, newOpt]);
-                  onChange(field.key, String(newOpt.value));
-                }}
-              />
+              {isCasteField && (
+                <AddCasteModal
+                  open={addCasteOpen}
+                  onClose={() => setAddCasteOpen(false)}
+                  onAdded={(newOpt) => {
+                    setExtraOptions((prev) => [...prev, newOpt]);
+                    onChange(field.key, String(newOpt.value));
+                  }}
+                />
+              )}
+              {isEducationField && (
+                <AddEducationModal
+                  open={addEducationOpen}
+                  onClose={() => setAddEducationOpen(false)}
+                  onAdded={(newOpt) => {
+                    setExtraOptions((prev) => [...prev, newOpt]);
+                    onChange(field.key, String(newOpt.value));
+                  }}
+                />
+              )}
+              {isOccupationField && (
+                <AddOccupationModal
+                  open={addOccupationOpen}
+                  onClose={() => setAddOccupationOpen(false)}
+                  onAdded={(newOpt) => {
+                    setExtraOptions((prev) => [...prev, newOpt]);
+                    onChange(field.key, String(newOpt.value));
+                  }}
+                />
+              )}
             </>
           );
         }
@@ -497,7 +750,7 @@ export function DynamicField({
 
       case 'radio': {
         const isJobSubField = field.bind === 'job_id' || field.key === 'job_id';
-        const isSectorOthers = isJobSubField && isOthersSector(parentValue);
+        const isSectorOthers = !isOccupationField && isJobSubField && isOthersSector(parentValue);
         const isDisabled = isParentMissing || isSectorOthers;
         return (
           <div className="radio-group" role="radiogroup" aria-label={field.label}>
