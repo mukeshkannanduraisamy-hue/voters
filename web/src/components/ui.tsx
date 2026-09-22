@@ -237,14 +237,7 @@ export function PhoneInput({
             disabled={pickingContact}
             onClick={(e) => { e.stopPropagation(); onPickContact(); }}
           >
-            {pickingContact ? (
-              <span className="spinner" />
-            ) : (
-              <>
-                <Icon name="users" size={15} />
-                <span>Contacts</span>
-              </>
-            )}
+            {pickingContact ? <span className="spinner" /> : <Icon name="users" size={16} />}
           </button>
         )}
       </div>
