@@ -41,6 +41,8 @@ export function getSqliteDb() {
     }
     sqliteDb = new DatabaseSync(SQLITE_PATH);
     sqliteDb.function('vms_uuid', () => crypto.randomUUID());
+    sqliteDb.function('curdate', () => new Date().toISOString().slice(0, 10));
+    sqliteDb.function('now', () => new Date().toISOString().replace('T', ' ').slice(0, 19));
   }
   return sqliteDb;
 }
@@ -132,6 +134,7 @@ export function translateSql(sql) {
     return `ON DUPLICATE KEY UPDATE ${m ? m[1] : 'id'}=${m ? m[1] : 'id'}`;
   });
   s = s.replace(/COLLATE\s+NOCASE/gi, '');
+  s = s.replace(/\bANY_VALUE\(([^)]+)\)/gi, 'MAX($1)');
   return s;
 }
 
@@ -141,10 +144,12 @@ export function translateSqlForSqlite(sql) {
   s = s.replace(/\bvms_([a-z0-9_]+)\b/gi, '$1');
   // NOW() -> datetime('now', 'localtime')
   s = s.replace(/\bNOW\(\)/gi, "datetime('now', 'localtime')");
-  // ANY_VALUE(col) -> col
-  s = s.replace(/\bANY_VALUE\(([^)]+)\)/gi, '$1');
-  // DATE_SUB(NOW(), INTERVAL x DAY) -> datetime('now', 'localtime', '-x days')
-  s = s.replace(/\bDATE_SUB\(NOW\(\),\s*INTERVAL\s*(\d+)\s*DAYS?\)/gi, "datetime('now', 'localtime', '-$1 days')");
+  // ANY_VALUE(col) -> MAX(col)
+  s = s.replace(/\bANY_VALUE\(([^)]+)\)/gi, 'MAX($1)');
+  // DATE_SUB(NOW()|CURDATE(), INTERVAL x DAY) -> date('now', 'localtime', '-x days')
+  s = s.replace(/\bDATE_SUB\((?:NOW|CURDATE)\(\),\s*INTERVAL\s*(\d+)\s*DAYS?\)/gi, "date('now', 'localtime', '-$1 days')");
+  // CURDATE() -> date('now', 'localtime')
+  s = s.replace(/\bCURDATE\(\)/gi, "date('now', 'localtime')");
   // ON DUPLICATE KEY UPDATE in voter_surveys -> ON CONFLICT (epic_id) DO UPDATE SET
   s = s.replace(/INSERT\s+INTO\s+(?:vms_)?voter_surveys\s*([\s\S]*?)\s*ON DUPLICATE KEY UPDATE/gi,
     (m, pre) => `INSERT INTO voter_surveys ${pre} ON CONFLICT (epic_id) DO UPDATE SET`);

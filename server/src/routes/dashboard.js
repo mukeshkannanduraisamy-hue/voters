@@ -218,10 +218,7 @@ router.get('/breakdown', async (req, res, next) => {
 
       const jobSectors = await db
         .prepare(
-          // ANY_VALUE(): category_ta is functionally dependent on category but
-          // MySQL's ONLY_FULL_GROUP_BY mode can't infer that on its own — see
-          // the identical fix in routes/masters.js's /job/sectors.
-          `SELECT jm.category AS label, ANY_VALUE(jm.category_ta) AS labelTa, COUNT(*) AS count
+          `SELECT jm.category AS label, MAX(jm.category_ta) AS labelTa, COUNT(*) AS count
              FROM voter_surveys s
              JOIN voters_master v ON v.epic_id = s.epic_id
              JOIN job_master jm ON jm.id = s.job_id
