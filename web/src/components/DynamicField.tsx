@@ -767,8 +767,11 @@ export function DynamicField({
                     className={`radio-opt ${on ? 'on' : ''}`}
                     onClick={(e) => {
                       if (isDisabled) return;
-                      e.preventDefault();
-                      onChange(field.key, on ? '' : o.value);
+                      // When clicking the label text/body, if it is already active, allow toggling it off
+                      if ((e.target as HTMLElement).tagName !== 'INPUT' && on) {
+                        e.preventDefault();
+                        onChange(field.key, '');
+                      }
                     }}
                   >
                     <input
@@ -777,7 +780,18 @@ export function DynamicField({
                       value={o.value}
                       checked={on}
                       disabled={isDisabled}
-                      readOnly
+                      onChange={() => {
+                        if (isDisabled) return;
+                        onChange(field.key, o.value);
+                      }}
+                      onClick={(e) => {
+                        if (isDisabled) return;
+                        // Clicking an already checked radio circle toggles it off
+                        if (on) {
+                          e.preventDefault();
+                          onChange(field.key, '');
+                        }
+                      }}
                     />
                     <span>{optLabel(o)}</span>
                   </label>

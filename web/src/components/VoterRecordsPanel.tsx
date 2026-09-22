@@ -10,6 +10,7 @@ import {
 import { LocalBodyBadge, PartyGrid, PartySymbol, SortHeader } from './spec-ui';
 import { Icon } from './icons';
 import { DynamicFieldGrid, resolveOtherOption } from './DynamicField';
+import { ContactImportModal } from './ContactImportModal';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -38,6 +39,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [detail, setDetail] = useState<Voter | null>(null);
+  const [surveyingVoter, setSurveyingVoter] = useState<Voter | null>(null);
   const [exporting, setExporting] = useState(false);
 
   // The dashboard deep-links here with ?local_body=…, so seed from the URL
@@ -53,7 +55,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const canExport = user?.role === 'A1_SUPER_ADMIN';
-  const canEditDirectly = user?.role === 'A1_SUPER_ADMIN' || user?.role === 'A2_SUPERVISOR';
+  const canEditDirectly = user?.role === 'A1_SUPER_ADMIN' || user?.role === 'A2_SUPERVISOR' || user?.role === 'A3_FIELD_AGENT';
   const isAgent = user?.role === 'A3_FIELD_AGENT';
 
   // Derive the actual API params from the quick filter — "mine" resolves to
@@ -276,7 +278,19 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
                         )}
                       </td>
                       <td>
-                        <Button size="sm" icon="eye" aria-label="View dossier" onClick={(e) => { e.stopPropagation(); setDetail(v); }} />
+                        <div className="row tight" style={{ flexWrap: 'nowrap' }}>
+                          <Button
+                            size="sm"
+                            icon={v.surveyed ? 'edit' : 'clipboard'}
+                            aria-label={v.surveyed ? 'Edit survey' : 'Start survey'}
+                            title={v.surveyed ? 'Edit survey' : 'Start survey'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSurveyingVoter(v);
+                            }}
+                          />
+                          <Button size="sm" icon="eye" aria-label="View dossier" title="View citizen dossier" onClick={(e) => { e.stopPropagation(); setDetail(v); }} />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -299,6 +313,18 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
           schema={schema}
           onClose={() => setDetail(null)}
           onSaved={refreshAfterEdit}
+        />
+      )}
+
+      {surveyingVoter && (
+        <EditSurveyModal
+          voter={surveyingVoter}
+          schema={schema}
+          onCancel={() => setSurveyingVoter(null)}
+          onSaved={(updated) => {
+            setSurveyingVoter(null);
+            refreshAfterEdit(updated);
+          }}
         />
       )}
     </>
@@ -334,16 +360,13 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
       footer={
         <>
           <Button onClick={onClose}>Close</Button>
-          {canEditDirectly && (
-            <Button variant="primary" icon="edit" onClick={() => setEditing(true)}>
-              {voter.surveyed ? 'Edit survey' : 'Enter survey'}
-            </Button>
-          )}
-          {isAgent && (
-            <Link className="btn btn-primary" to={`/survey/booth?epic=${encodeURIComponent(voter.epicId)}`} onClick={onClose}>
-              <Icon name="clipboard" size={16} />{voter.surveyed ? 'Update survey' : 'Start survey'}
-            </Link>
-          )}
+          <Button
+            variant="primary"
+            icon={voter.surveyed ? 'edit' : 'clipboard'}
+            onClick={() => setEditing(true)}
+          >
+            {voter.surveyed ? 'Edit survey' : 'Start survey'}
+          </Button>
         </>
       }
     >
@@ -425,14 +448,12 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
   );
 }
 
-/* ========================= A1/A2 direct edit modal ======================== */
+/* ========================= direct survey edit modal ======================== */
 /**
- * Renders the *same* published schema the field agents get, so a supervisor
- * correcting a record sees exactly the questions that were asked — including
- * any custom fields and conditional logic — rather than a second, drifting
- * copy of the form.
+ * Renders the published schema in a popup modal, used identically by Admin,
+ * Supervisor, and Field Agent so every role has the exact same popup experience.
  */
-function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
+export function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
   voter: Voter; schema: FormSchema | null;
   onCancel: () => void; onSaved: (v: Voter) => void;
 }) {
@@ -445,6 +466,14 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+
+  useEffect(() => {
+    setCorrectedNameTa(s?.correctedNameTa || voter.nameTa || '');
+    setCorrectedRelativeNameTa(s?.correctedRelativeNameTa || voter.relativeNameTa || '');
+  }, [voter.epicId, s?.correctedNameTa, s?.correctedRelativeNameTa, voter.nameTa, voter.relativeNameTa]);
+
+  const surveyKey = `${voter.epicId}::${s?.surveyedAt ?? ''}::${s?.jobType ?? ''}::${s?.lastUpdatedBy ?? ''}::${schema?.version ?? ''}`;
 
   useEffect(() => {
     if (!schema) return;
@@ -474,7 +503,7 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
     const sectorField = schema.fields.find((f) => f.key === 'job_sector' || (f.source?.kind === 'master' && f.source.master === 'job_sector'));
     if (sectorField) seeded[sectorField.key] = s?.jobCategory || 'Others';
     setAnswers(seeded);
-  }, [schema, voter.epicId]);
+  }, [schema, surveyKey]);
 
   const setAnswer = (key: string, value: string | string[]) => {
     setAnswers((prev) => {
@@ -516,31 +545,62 @@ function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
   };
 
   return (
-    <Modal
-      open wide title={`Edit survey — ${voter.nameTa}`} icon="edit" onClose={onCancel}
-      footer={<>
-        <Button onClick={onCancel} disabled={saving}>Cancel</Button>
-        <Button variant="primary" icon="save" loading={saving} onClick={(e) => save(e as unknown as FormEvent)}>Save survey</Button>
-      </>}
-    >
-      {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
-      <form onSubmit={save} className="stack">
-        <div className="grid cols-2">
-          <Field label="Corrected name (Tamil)">
-            <Input className="ta" value={correctedNameTa} onChange={(e) => setCorrectedNameTa(e.target.value)} />
-          </Field>
-          <Field label={`Corrected relative name (${voter.relationTypeTa ?? 'father / husband'})`}>
-            <Input className="ta" value={correctedRelativeNameTa} onChange={(e) => setCorrectedRelativeNameTa(e.target.value)} />
-          </Field>
-        </div>
+    <>
+      <Modal
+        open wide
+        title={`${voter.surveyed ? 'Edit survey' : 'Survey'} — ${voter.nameTa}`}
+        icon="edit"
+        onClose={onCancel}
+        footer={<>
+          <Button onClick={onCancel} disabled={saving}>Cancel</Button>
+          <Button variant="primary" icon="save" loading={saving} onClick={(e) => save(e as unknown as FormEvent)}>
+            {voter.surveyed ? 'Update survey' : 'Save survey'}
+          </Button>
+        </>}
+      >
+        {error && <div className="mb-4"><Alert tone="bad">{error}</Alert></div>}
+        <form onSubmit={save} className="stack">
+          {/* ---- Official roll data preview (locked) ---- */}
+          <div className="locked-grid mb-3">
+            <Cell k="EPIC NUMBER" v={voter.epicId} mono />
+            <Cell k="POLLING BOOTH" v={`Booth ${voter.partNo}`} />
+            <Cell k="SERIAL NO" v={String(voter.voterSno ?? '—')} />
+            <Cell k="AGE / SEX" v={`${voter.age ?? '—'} / ${voter.gender ?? '—'}`} ta />
+            <Cell k="LOCAL BODY / DOOR" v={`${voter.localBodyNameTa}${voter.doorNo ? ` · Door ${voter.doorNo}` : ''}`} ta span2 />
+          </div>
 
-        {!schema ? (
-          <span className="t-sm t-muted">Loading the survey form…</span>
-        ) : (
-          <DynamicFieldGrid fields={schema.fields} values={answers} errors={errors} onChange={setAnswer} />
-        )}
-      </form>
-    </Modal>
+          <div className="grid cols-2">
+            <Field label="Corrected name (Tamil)">
+              <Input className="ta" value={correctedNameTa} onChange={(e) => setCorrectedNameTa(e.target.value)} placeholder="Voter name (Tamil)" />
+            </Field>
+            <Field label={`Corrected relative name (${voter.relationTypeTa ?? 'father / husband'})`}>
+              <Input className="ta" value={correctedRelativeNameTa} onChange={(e) => setCorrectedRelativeNameTa(e.target.value)} placeholder="Relative name (Tamil)" />
+            </Field>
+          </div>
+
+          {!schema ? (
+            <span className="t-sm t-muted">Loading the survey form…</span>
+          ) : (
+            <DynamicFieldGrid
+              fields={schema.fields}
+              values={answers}
+              errors={errors}
+              onChange={setAnswer}
+              onPickContact={() => setContactModalOpen(true)}
+            />
+          )}
+        </form>
+      </Modal>
+
+      <ContactImportModal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        onSelect={(phone) => {
+          setAnswer('phone_number', phone);
+          setContactModalOpen(false);
+        }}
+      />
+    </>
   );
 }
 
