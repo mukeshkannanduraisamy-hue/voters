@@ -3,10 +3,11 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import { requireEnv } from './env.js';
 import { DEFAULT_FIELDS } from './formDefaults.js';
 
+const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(__dirname, '../../../data');
 export const SQLITE_PATH = path.resolve(DATA_DIR, 'vms.db');
@@ -28,6 +29,15 @@ export function getSqliteDb() {
   if (!sqliteDb) {
     if (!fs.existsSync(SQLITE_PATH)) {
       throw new Error(`SQLite database not found at ${SQLITE_PATH}`);
+    }
+    let DatabaseSync;
+    try {
+      ({ DatabaseSync } = require('node:sqlite'));
+    } catch {
+      throw new Error(
+        `SQLite mode requires Node.js v22.5+ with built-in node:sqlite. ` +
+        `Current Node.js version is ${process.version}. Please run with central MySQL or upgrade Node.js.`
+      );
     }
     sqliteDb = new DatabaseSync(SQLITE_PATH);
     sqliteDb.function('vms_uuid', () => crypto.randomUUID());
@@ -180,9 +190,10 @@ async function poolQuery(sql, params = [], retries = 2) {
     return [{ affectedRows: res.changes, insertId: res.lastInsertRowid != null ? Number(res.lastInsertRowid) : null }, []];
   }
 
+  const mySql = translateSql(sql);
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await getMysqlPool().query(sql, params);
+      return await getMysqlPool().query(mySql, params);
     } catch (err) {
       if (fs.existsSync(SQLITE_PATH) && (err.code === 'ER_ACCESS_DENIED_ERROR' || err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT')) {
         console.warn(`[db] Remote MySQL connection failed (${err.code}). Falling back to local SQLite: ${SQLITE_PATH}`);
@@ -416,8 +427,8 @@ export async function migrate() {
         await poolQuery("DELETE FROM sync_outbox WHERE table_name IN ('voter_surveys', 'survey_answers')");
       } catch {}
       await poolQuery(
-        "INSERT INTO audit_log (id, user_id, action, entity, entity_id, details, created_at) VALUES (?, 'system', 'CLEAR_ALL_SURVEYS_REQ_2026_09_21', 'voter_surveys', 'all', ?, NOW())",
-        [crypto.randomUUID(), `Cleared ${delSurv?.affectedRows ?? 0} voter surveys`]
+        "INSERT INTO audit_log (user_id, action, entity, entity_id, detail) VALUES ('system', 'CLEAR_ALL_SURVEYS_REQ_2026_09_21', 'voter_surveys', 'all', ?)",
+        [`Cleared ${delSurv?.affectedRows ?? 0} voter surveys`]
       );
       console.log(`[db] Cleared all survey entries (${delSurv?.affectedRows ?? 0} rows deleted)`);
     }

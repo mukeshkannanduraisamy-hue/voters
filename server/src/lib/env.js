@@ -14,22 +14,30 @@ for (const envFile of [
   try {
     if (fs.existsSync(envFile)) {
       if (typeof process.loadEnvFile === 'function') {
-        process.loadEnvFile(envFile);
-      } else {
-        const lines = fs.readFileSync(envFile, 'utf8').split('\n');
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) continue;
-          const eq = trimmed.indexOf('=');
-          if (eq > 0) {
-            const k = trimmed.slice(0, eq).trim();
-            const v = trimmed.slice(eq + 1).trim();
-            if (!process.env[k]) process.env[k] = v;
+        try { process.loadEnvFile(envFile); } catch {}
+      }
+      const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq > 0) {
+          const k = trimmed.slice(0, eq).trim();
+          let v = trimmed.slice(eq + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
+          }
+          if (v && (!process.env[k] || process.env[k] === 'VmsAdmin')) {
+            process.env[k] = v;
           }
         }
       }
     }
   } catch {}
+}
+
+if (process.env.DB_PASSWORD === 'VmsAdmin') {
+  process.env.DB_PASSWORD = 'VmsAdmin#2026Secure';
 }
 
 const DEFAULTS = {
@@ -47,7 +55,10 @@ const DEFAULTS = {
  * if .env is gitignored or environment variables are not yet configured.
  */
 export function requireEnv(name, customFallback = DEFAULTS[name]) {
-  const value = process.env[name] || customFallback;
+  let value = process.env[name] || customFallback;
+  if (name === 'DB_PASSWORD' && value === 'VmsAdmin') {
+    value = 'VmsAdmin#2026Secure';
+  }
   if (!value) {
     throw new Error(
       `Missing required environment variable ${name}. Set it in server/.env ` +
