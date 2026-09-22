@@ -419,6 +419,7 @@ export function DynamicField({
   onPickContact?: () => void;
   pickingContact?: boolean;
 }) {
+  const toast = useToast();
   const remoteOptions = useFieldOptions(field);
   const [extraOptions, setExtraOptions] = useState<FieldOption[]>([]);
   const isCasteField = field.bind === 'caste_id' || field.key === 'caste_id' || (field.source?.kind === 'master' && field.source.master === 'caste');
@@ -593,24 +594,73 @@ export function DynamicField({
         );
 
       case 'phone': {
-        const nativeContactsSupported = typeof navigator !== 'undefined' && 'contacts' in navigator;
-        const pickContact = onPickContact ?? (nativeContactsSupported ? async () => {
+        const pickContact = onPickContact ?? (async () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (typeof navigator === 'undefined' || !('contacts' in navigator) || !(navigator as any).contacts?.select) {
+            toast.warn(
+              'Direct contacts app',
+              'Device contacts app is supported on mobile devices (Android Chrome). Please enter the mobile number manually on this device.'
+            );
+            return;
+          }
+
           try {
+            let props = ['tel'];
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const contacts = await (navigator as any).contacts.select(['tel'], { multiple: false });
-            if (!contacts?.length) return;
-            const rawTels: string[] = contacts[0]?.tel ?? [];
-            const digits = rawTels
-              .map((t: string) => t.replace(/\D/g, ''))
+            if (typeof (navigator as any).contacts?.getProperties === 'function') {
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const supportedProps = await (navigator as any).contacts.getProperties();
+                if (supportedProps && supportedProps.includes('name')) props.push('name');
+              } catch { /* ignore getProperties failure */ }
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const contacts = await (navigator as any).contacts.select(props, { multiple: false });
+            if (!contacts || !contacts.length) return;
+
+            const c = contacts[0];
+            const rawTels: string[] = Array.isArray(c?.tel) ? c.tel : (c?.tel ? [c.tel] : []);
+            const contactName = c?.name ? (Array.isArray(c.name) ? c.name[0] : c.name) : undefined;
+            if (!rawTels.length) {
+              toast.bad('No telephone number', 'The selected contact does not have a telephone number.');
+              return;
+            }
+
+            const cleanDigits = rawTels
+              .map((t: string) => String(t).replace(/\D/g, ''))
               .map((t: string) => {
                 if (t.startsWith('91') && t.length === 12) return t.slice(2);
                 if (t.startsWith('0') && t.length === 11) return t.slice(1);
+                if (t.length > 10) return t.slice(-10);
                 return t;
               })
               .find((t: string) => /^[6-9]\d{9}$/.test(t));
-            if (digits) onChange(field.key, digits);
-          } catch { /* cancelled or unavailable */ }
-        } : undefined);
+
+            if (cleanDigits) {
+              onChange(field.key, cleanDigits);
+              toast.ok(
+                'Contact selected',
+                contactName ? `${contactName} · ${cleanDigits.slice(0, 5)} ${cleanDigits.slice(5)}` : `${cleanDigits.slice(0, 5)} ${cleanDigits.slice(5)}`
+              );
+            } else {
+              const fallbackDigits = String(rawTels[0]).replace(/\D/g, '').slice(-10);
+              if (fallbackDigits) {
+                onChange(field.key, fallbackDigits);
+                toast.warn('Check mobile number', `Extracted ${fallbackDigits}. Please verify the 10 digits.`);
+              } else {
+                toast.bad('Invalid number', 'No valid telephone number found in selected contact.');
+              }
+            }
+          } catch (err: unknown) {
+            const errorObj = err as { name?: string; message?: string } | null;
+            if (errorObj?.name === 'AbortError' || String(errorObj?.message || '').toLowerCase().includes('cancel')) {
+              return; // User cancelled / dismissed contacts app
+            }
+            console.warn('Contact picker error:', err);
+          }
+        });
+
         return (
           <PhoneInput
             value={str}

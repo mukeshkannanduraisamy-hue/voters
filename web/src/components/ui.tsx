@@ -232,12 +232,19 @@ export function PhoneInput({
           <button
             type="button"
             className="input-contact-btn"
-            title="Pick from contacts / தொடர்புகளிலிருந்து எடு"
-            aria-label="Pick contact"
+            title="Open device contacts app / தொடர்புகள் செயலியை திற"
+            aria-label="Open device contacts app"
             disabled={pickingContact}
             onClick={(e) => { e.stopPropagation(); onPickContact(); }}
           >
-            {pickingContact ? <span className="spinner" /> : <Icon name="users" size={16} />}
+            {pickingContact ? (
+              <span className="spinner" />
+            ) : (
+              <>
+                <Icon name="users" size={15} />
+                <span>Contacts</span>
+              </>
+            )}
           </button>
         )}
       </div>

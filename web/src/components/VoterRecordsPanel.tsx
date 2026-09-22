@@ -10,7 +10,6 @@ import {
 import { LocalBodyBadge, PartyGrid, PartySymbol, SortHeader } from './spec-ui';
 import { Icon } from './icons';
 import { DynamicFieldGrid, resolveOtherOption } from './DynamicField';
-import { ContactImportModal } from './ContactImportModal';
 import {
   isMulti, isStructural, pruneHidden, validateAnswers,
   type AnswerMap, type FormSchema,
@@ -466,7 +465,6 @@ export function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [contactModalOpen, setContactModalOpen] = useState(false);
 
   useEffect(() => {
     setCorrectedNameTa(s?.correctedNameTa || voter.nameTa || '');
@@ -586,20 +584,10 @@ export function EditSurveyModal({ voter, schema, onCancel, onSaved }: {
               values={answers}
               errors={errors}
               onChange={setAnswer}
-              onPickContact={() => setContactModalOpen(true)}
             />
           )}
         </form>
       </Modal>
-
-      <ContactImportModal
-        open={contactModalOpen}
-        onClose={() => setContactModalOpen(false)}
-        onSelect={(phone) => {
-          setAnswer('phone_number', phone);
-          setContactModalOpen(false);
-        }}
-      />
     </>
   );
 }
