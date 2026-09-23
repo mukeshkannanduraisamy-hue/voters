@@ -66,6 +66,9 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   const canEditDirectly = user?.role === 'A1_SUPER_ADMIN' || user?.role === 'A2_SUPERVISOR' || user?.role === 'A3_FIELD_AGENT';
   const isAgent = user?.role === 'A3_FIELD_AGENT';
 
+  // Resolved label of the currently-selected agent (for display in sub-headers / empty states)
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
+
   // Derive the actual API params from the quick filter:
   // For field agents: 'mine' sends status='surveyed' and agent_id='me' (scoped to self).
   // For admins/supervisors: 'mine' sends status='surveyed' and agent_id=selectedAgentId (all surveyed electors if none selected).
@@ -165,9 +168,8 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
 
   const handleQuickFilterChange = (val: QuickFilter) => {
     setQuickFilter(val);
-    if (val !== 'mine') {
-      setSelectedAgentId('');
-    }
+    // Clear the agent selector when leaving the "Surveyed" tab
+    if (val !== 'mine') setSelectedAgentId('');
   };
 
   const refreshAfterEdit = (updated: Voter) => {
@@ -175,24 +177,60 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
     void load();
   };
 
+  // Human-readable subtitle for the results card
+  const resultSub = (() => {
+    if (quickFilter === 'pending') return 'Showing only pending (unsurveyed) electors';
+    if (quickFilter === 'mine') {
+      if (isAgent) return 'Showing electors you have surveyed';
+      if (selectedAgent) return `Surveys by ${selectedAgent.fullName || selectedAgent.mobileNumber}`;
+      return 'All completed surveys — by all agents';
+    }
+    if (search || localBody || partNo || gender) return 'Filtered results';
+    return undefined;
+  })();
+
   return (
     <>
       <Card className="mb-4">
         <div className="card-body tight stack tight">
-          {/* Quick filter: what an agent actually wants day to day — what have I
-              finished, and what's still left — without hand-building a filter. */}
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <Segmented
-              value={quickFilter}
-              onChange={handleQuickFilterChange}
-              options={[
-                { value: 'all' as QuickFilter, label: 'All electors' },
-                { value: 'mine' as QuickFilter, label: isAgent ? 'Done by me' : 'Done by agent' },
-                { value: 'pending' as QuickFilter, label: 'All pending' },
-              ]}
-            />
+          {/* ── Row 1: Quick-filter tabs ──────────────────────────────── */}
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div className="stack" style={{ gap: 'var(--sp-2)' }}>
+              <Segmented
+                value={quickFilter}
+                onChange={handleQuickFilterChange}
+                options={[
+                  { value: 'all'     as QuickFilter, label: 'All electors' },
+                  { value: 'mine'    as QuickFilter, label: isAgent ? 'Done by me' : 'Surveyed' },
+                  { value: 'pending' as QuickFilter, label: 'Pending' },
+                ]}
+              />
+              {/* Agent sub-filter – only shown when Admin/Supervisor is on the Surveyed tab */}
+              {!isAgent && quickFilter === 'mine' && agents.length > 0 && (
+                <div className="row tight" style={{ flexWrap: 'wrap' }}>
+                  <span className="t-sm t-muted" style={{ whiteSpace: 'nowrap', alignSelf: 'center' }}>Agent:</span>
+                  <Select
+                    value={selectedAgentId}
+                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                    aria-label="Filter by agent"
+                    style={{ flex: '0 1 240px', minWidth: 160 }}
+                  >
+                    <option value="">All agents ({agents.reduce((n, a) => n + a.surveysDone, 0)} total)</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.fullName || a.mobileNumber} — {a.surveysDone} survey{a.surveysDone !== 1 ? 's' : ''}
+                      </option>
+                    ))}
+                  </Select>
+                  {selectedAgentId && (
+                    <Button size="sm" icon="x" onClick={() => setSelectedAgentId('')}>Clear</Button>
+                  )}
+                </div>
+              )}
+            </div>
             {hasFilters && <Button size="sm" icon="x" onClick={clearFilters}>Reset filters</Button>}
           </div>
+          {/* ── Row 2: Search + Location + Gender + Rows per page ──────── */}
           <div className="row">
             <div style={{ flex: '2 1 260px', minWidth: 210 }}>
               <Input
@@ -202,29 +240,6 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
                 aria-label="Search voters"
               />
             </div>
-            {!isAgent && (
-              <Select
-                value={selectedAgentId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedAgentId(val);
-                  if (val && quickFilter !== 'mine') {
-                    setQuickFilter('mine');
-                  }
-                }}
-                disabled={quickFilter === 'pending'}
-                title={quickFilter === 'pending' ? 'Agent filter only applies to completed surveys' : undefined}
-                aria-label="Filter by agent"
-                style={{ flex: '1 1 180px' }}
-              >
-                <option value="">All agents</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.fullName || a.mobileNumber} {a.surveysDone > 0 ? `(${a.surveysDone})` : ''}
-                  </option>
-                ))}
-              </Select>
-            )}
             <Select value={localBody} onChange={(e) => setLocalBody(e.target.value)} aria-label="Filter by local body" style={{ flex: '1 1 180px' }}>
               <option value="">All local bodies</option>
               {tree?.localBodies.map((lb) => (
@@ -258,7 +273,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
       <Card>
         <CardHead
           title={data ? `${fmt(data.total)} elector${data.total === 1 ? '' : 's'}` : 'Electors'}
-          sub={hasFilters ? 'Filtered results' : undefined}
+          sub={resultSub}
           icon="list"
           actions={
             <>
@@ -274,11 +289,46 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
 
           {loading ? (
             <TableSkeleton rows={8} cols={8} />
-          ) : !data || data.rows.length === 0 ? (
-            <Empty icon="search" title="No electors match">
-              {hasFilters ? 'Try widening or clearing your filters.' : 'No electors are visible in your assigned booths.'}
-            </Empty>
-          ) : (
+          ) : !data || data.rows.length === 0 ? (() => {
+            // Context-aware empty state messages
+            let icon: string = 'search';
+            let title: string = 'No electors match';
+            let body: string = hasFilters ? 'Try widening or clearing your filters.' : 'No electors found.';
+
+            if (quickFilter === 'mine' && !isAgent) {
+              if (selectedAgent) {
+                title = 'No surveys from this agent';
+                body = `${selectedAgent.fullName || selectedAgent.mobileNumber} hasn't completed any surveys yet.`;
+                icon = 'user';
+              } else if (agents.length === 0) {
+                title = 'No field agents yet';
+                body = 'Create field agent accounts to start collecting survey data from the field.';
+                icon = 'user-plus';
+              } else {
+                title = 'No surveys yet';
+                body = 'No surveys have been submitted by any agent. Once agents start surveying, they will appear here.';
+                icon = 'clipboard';
+              }
+            } else if (quickFilter === 'mine' && isAgent) {
+              title = 'No surveys yet';
+              body = 'You haven\'t completed any surveys yet. Start surveying electors from the search above.';
+              icon = 'clipboard';
+            } else if (quickFilter === 'pending') {
+              title = hasFilters ? 'No pending electors match' : 'All done — no pending electors!';
+              body = hasFilters ? 'All electors in this filtered view have been surveyed.' : 'Every elector in your assigned booths has been surveyed. Great work!';
+              icon = hasFilters ? 'search' : 'check';
+            } else if (!isAgent && !hasFilters) {
+              title = 'No electors found';
+              body = 'The electoral roll appears to be empty.';
+            } else if (isAgent && !hasFilters) {
+              title = 'No electors assigned';
+              body = 'No electors are visible in your assigned booths. Contact your supervisor to get booths assigned.';
+            }
+
+            return (
+              <Empty icon={icon as 'search'} title={title}>{body}</Empty>
+            );
+          })() : (
             <div className="table-wrap">
               <table className="table table-clickable">
                 <thead>
