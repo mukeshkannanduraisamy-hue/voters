@@ -254,7 +254,7 @@ export default function Dashboard() {
                 </Empty>
               ) : (
                 <div className="table-wrap">
-                  <table className="table">
+                  <table className="table table-clickable">
                     <thead>
                       <tr>
                         <th>Agent</th>
@@ -266,7 +266,11 @@ export default function Dashboard() {
                     </thead>
                     <tbody>
                       {agents.map((a) => (
-                        <tr key={a.id}>
+                        <tr
+                          key={a.id}
+                          onClick={() => nav(`${scopedPath(user?.role, 'voters')}?agent_id=${a.id}&status=surveyed`)}
+                          title={`View surveys completed by ${a.fullName || a.mobileNumber}`}
+                        >
                           <td>
                             <div className="row tight" style={{ flexWrap: 'nowrap' }}>
                               <div className="avatar" style={{ width: 30, height: 30, flex: '0 0 30px', fontSize: 11 }}>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, api, qs } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import type { BoothTree, Directory, Voter } from '../lib/types';
+import type { AgentProgress, BoothTree, Directory, Voter } from '../lib/types';
 import {
   Alert, Badge, Button, Card, CardHead, Empty, Field, Input, Modal, Pager,
   PhoneInput, Segmented, Select, TableSkeleton, Textarea, fmt, fmtDate, useToast,
@@ -40,6 +40,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   const [detail, setDetail] = useState<Voter | null>(null);
   const [surveyingVoter, setSurveyingVoter] = useState<Voter | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [agents, setAgents] = useState<AgentProgress[]>([]);
 
   // The dashboard deep-links here with ?local_body=…, so seed from the URL
   // when this panel owns the query string.
@@ -47,7 +48,15 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   const [localBody, setLocalBody] = useState(syncUrl ? params.get('local_body') ?? '' : '');
   const [partNo, setPartNo] = useState(syncUrl ? params.get('part_no') ?? '' : '');
   const [gender, setGender] = useState('');
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [selectedAgentId, setSelectedAgentId] = useState(syncUrl ? params.get('agent_id') ?? '' : '');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>(() => {
+    if (!syncUrl) return 'all';
+    const s = params.get('status');
+    const a = params.get('agent_id');
+    if (s === 'pending') return 'pending';
+    if (s === 'surveyed' || a) return 'mine';
+    return 'all';
+  });
   const [limit, setLimit] = useState(25);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('voter_sno');
@@ -57,15 +66,24 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   const canEditDirectly = user?.role === 'A1_SUPER_ADMIN' || user?.role === 'A2_SUPERVISOR' || user?.role === 'A3_FIELD_AGENT';
   const isAgent = user?.role === 'A3_FIELD_AGENT';
 
-  // Derive the actual API params from the quick filter — "mine" resolves to
-  // the caller's own id server-side via the special 'me' token.
-  const status = quickFilter === 'pending' ? 'pending' : '';
-  const agentId = quickFilter === 'mine' ? 'me' : '';
+  // Derive the actual API params from the quick filter:
+  // For field agents: 'mine' sends status='surveyed' and agent_id='me' (scoped to self).
+  // For admins/supervisors: 'mine' sends status='surveyed' and agent_id=selectedAgentId (all surveyed electors if none selected).
+  const status = quickFilter === 'pending'
+    ? 'pending'
+    : (quickFilter === 'mine' ? 'surveyed' : '');
+
+  const agentId = isAgent
+    ? (quickFilter === 'mine' ? 'me' : '')
+    : (quickFilter === 'mine' ? selectedAgentId : '');
 
   useEffect(() => {
     api.get<BoothTree>('/api/booths').then(setTree).catch(() => { /* filters degrade to text search */ });
     api.get<FormSchema>('/api/form-schema/published').then(setSchema).catch(() => { /* edit modal degrades */ });
-  }, []);
+    if (!isAgent) {
+      api.get<AgentProgress[]>('/api/dashboard/agents').then(setAgents).catch(() => { /* agent filter degrades */ });
+    }
+  }, [isAgent]);
 
   const filters = useMemo(
     () => ({ search, local_body: localBody, part_no: partNo, gender, status, agent_id: agentId, limit, page, sort_by: sortBy, sort_dir: sortDir }),
@@ -90,7 +108,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, refreshTrigger]);
 
-  useEffect(() => { setPage(1); }, [search, localBody, partNo, gender, quickFilter, limit]);
+  useEffect(() => { setPage(1); }, [search, localBody, partNo, gender, quickFilter, selectedAgentId, limit]);
 
   // Keep the URL in step so a filtered view can be shared or reloaded —
   // skipped entirely when embedded, so this never clobbers a sibling ?epic=.
@@ -100,9 +118,14 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
     if (search) next.search = search;
     if (localBody) next.local_body = localBody;
     if (partNo) next.part_no = partNo;
+    if (quickFilter === 'pending') next.status = 'pending';
+    else if (quickFilter === 'mine') {
+      next.status = 'surveyed';
+      if (!isAgent && selectedAgentId) next.agent_id = selectedAgentId;
+    }
     setParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, localBody, partNo, syncUrl]);
+  }, [search, localBody, partNo, quickFilter, selectedAgentId, syncUrl, isAgent]);
 
   // Selecting a local body narrows the booth list; clearing it drops a stale booth.
   const boothOptions = useMemo(() => {
@@ -124,7 +147,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
     setExporting(true);
     try {
       await api.download(
-        `/api/reports/export${qs({ search, local_body: localBody, part_no: partNo, gender, status })}`,
+        `/api/reports/export${qs({ search, local_body: localBody, part_no: partNo, gender, status, agent_id: agentId })}`,
         'vms-survey-report.xlsx'
       );
       toast.ok('Export started', 'The workbook is downloading.');
@@ -136,9 +159,16 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
   };
 
   const clearFilters = () => {
-    setSearch(''); setLocalBody(''); setPartNo(''); setGender(''); setQuickFilter('all');
+    setSearch(''); setLocalBody(''); setPartNo(''); setGender(''); setQuickFilter('all'); setSelectedAgentId('');
   };
-  const hasFilters = !!(search || localBody || partNo || gender || quickFilter !== 'all');
+  const hasFilters = !!(search || localBody || partNo || gender || quickFilter !== 'all' || selectedAgentId);
+
+  const handleQuickFilterChange = (val: QuickFilter) => {
+    setQuickFilter(val);
+    if (val !== 'mine') {
+      setSelectedAgentId('');
+    }
+  };
 
   const refreshAfterEdit = (updated: Voter) => {
     setDetail(updated);
@@ -154,7 +184,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <Segmented
               value={quickFilter}
-              onChange={setQuickFilter}
+              onChange={handleQuickFilterChange}
               options={[
                 { value: 'all' as QuickFilter, label: 'All electors' },
                 { value: 'mine' as QuickFilter, label: isAgent ? 'Done by me' : 'Done by agent' },
@@ -172,6 +202,29 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
                 aria-label="Search voters"
               />
             </div>
+            {!isAgent && (
+              <Select
+                value={selectedAgentId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedAgentId(val);
+                  if (val && quickFilter !== 'mine') {
+                    setQuickFilter('mine');
+                  }
+                }}
+                disabled={quickFilter === 'pending'}
+                title={quickFilter === 'pending' ? 'Agent filter only applies to completed surveys' : undefined}
+                aria-label="Filter by agent"
+                style={{ flex: '1 1 180px' }}
+              >
+                <option value="">All agents</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.fullName || a.mobileNumber} {a.surveysDone > 0 ? `(${a.surveysDone})` : ''}
+                  </option>
+                ))}
+              </Select>
+            )}
             <Select value={localBody} onChange={(e) => setLocalBody(e.target.value)} aria-label="Filter by local body" style={{ flex: '1 1 180px' }}>
               <option value="">All local bodies</option>
               {tree?.localBodies.map((lb) => (
@@ -270,6 +323,11 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
                             <div style={{ minWidth: 0 }}>
                               <Badge tone="ok" dot>{v.survey?.partyCode ?? 'Surveyed'}</Badge>
                               {v.survey?.phoneNumber && <div className="t-xs t-subtle mono">{v.survey.phoneNumber}</div>}
+                              {!isAgent && v.survey?.agentName && (
+                                <div className="t-xs t-subtle" title={`Surveyed by ${v.survey.agentName}`}>
+                                  by {v.survey.agentName}
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : (
