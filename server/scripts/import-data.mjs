@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { db, migrate, analyze, DATA_DIR, pool } from '../src/lib/db.js';
+import { extractVillageFromSection } from '../src/lib/villageExtractor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -164,9 +165,9 @@ async function main() {
     const insVoter = db.prepare(
       `INSERT INTO voters_master
         (epic_id, voter_sno, part_no, name_ta, relation_type_ta, relative_name_ta,
-         door_no, age, gender, section_title_ta, roll_type_ta,
+         door_no, age, gender, section_title_ta, section_village_ta, roll_type_ta,
          is_supplement, is_deleted, deletion_reason, page_number)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(epic_id) DO NOTHING`
     );
 
@@ -177,11 +178,14 @@ async function main() {
       const partNo = num(v[11]);
       if (partNo === null || !knownParts.has(partNo)) { noPart++; continue; }
 
+      const secTitle = clean(v[9]);
+      const secVillage = extractVillageFromSection(secTitle);
+
       await insVoter.run(
         epic, num(v[1]), partNo,
         clean(v[3]) ?? '—', clean(v[4]), clean(v[5]),
         clean(v[6]), num(v[7]), clean(v[8]),
-        clean(v[9]), clean(v[10]),
+        secTitle, secVillage, clean(v[10]),
         bool(v[12]), bool(v[13]), clean(v[14]), num(v[16])
       );
       inserted++;

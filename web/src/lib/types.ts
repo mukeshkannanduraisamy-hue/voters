@@ -111,6 +111,7 @@ export interface Voter {
   age: number | null;
   gender: string | null;
   sectionTitleTa: string | null;
+  sectionVillageTa?: string | null;
   rollTypeTa: string | null;
   isSupplement: boolean;
   isDeleted: boolean;

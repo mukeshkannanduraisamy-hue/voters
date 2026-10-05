@@ -236,7 +236,7 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name (Tamil), door no, EPIC ID or serial…"
+                placeholder="Search by name (Tamil), village, door no, EPIC ID or serial…"
                 aria-label="Search voters"
               />
             </div>
@@ -350,6 +350,11 @@ export function VoterRecordsPanel({ syncUrl = true, refreshTrigger }: { syncUrl?
                         <div className="ta t-semi" title={v.nameTa}>{v.survey?.correctedNameTa ?? v.nameTa}</div>
                         {v.survey?.correctedNameTa && v.survey.correctedNameTa !== v.nameTa && (
                           <span className="badge badge-brand ta" style={{ fontSize: 10 }}>திருத்தப்பட்டது</span>
+                        )}
+                        {v.sectionVillageTa && (
+                          <div className="t-xs t-subtle ta" style={{ marginTop: 2 }} title={v.sectionTitleTa ?? v.sectionVillageTa}>
+                            📍 {v.sectionVillageTa}
+                          </div>
                         )}
                       </td>
                       {/* Shown directly in its own column (not nested behind a
@@ -498,6 +503,7 @@ function CitizenDossier({ voter, isAgent, canEditDirectly, schema, onClose, onSa
             <Cell k="Local body" v={voter.localBodyNameTa} ta />
             <Cell k="Constituency" v={`AC ${voter.acNo} - ${voter.acNameTa}`} ta />
             {voter.mainVillageTa && <Cell k="Town / Village" v={voter.mainVillageTa} ta />}
+            {voter.sectionVillageTa && <Cell k="கிராமம் / பகுதி (Village)" v={voter.sectionVillageTa} ta />}
             {voter.pincode && <Cell k="Pincode" v={voter.pincode} />}
             {voter.sectionTitleTa && <Cell k="Section" v={voter.sectionTitleTa} span2 ta />}
           </div>

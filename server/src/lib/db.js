@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { requireEnv } from './env.js';
 import { DEFAULT_FIELDS } from './formDefaults.js';
+import { extractVillageFromSection } from './villageExtractor.js';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -439,6 +440,62 @@ export async function migrate() {
     }
   } catch (e) {
     console.warn('[db] Survey clearance warning:', e.message);
+  }
+
+  // Auto-migrate section_village_ta column and populate extracted village names
+  try {
+    if (isSqliteMode) {
+      const cols = await db.prepare('PRAGMA table_info(voters_master)').all();
+      if (!cols.some((c) => c.name === 'section_village_ta')) {
+        await db.prepare('ALTER TABLE voters_master ADD COLUMN section_village_ta VARCHAR(255)').run();
+        console.log('[db] Added column section_village_ta to voters_master (SQLite)');
+      }
+      try {
+        await db.prepare('CREATE INDEX IF NOT EXISTS idx_voters_section_village ON voters_master(section_village_ta)').run();
+      } catch {}
+
+      const unpopulated = await db
+        .prepare("SELECT DISTINCT section_title_ta FROM voters_master WHERE section_title_ta IS NOT NULL AND (section_village_ta IS NULL OR section_village_ta = '')")
+        .all();
+      if (unpopulated.length > 0) {
+        await db.prepare('BEGIN TRANSACTION').run();
+        const updateStmt = db.prepare('UPDATE voters_master SET section_village_ta = ? WHERE section_title_ta = ?');
+        for (const row of unpopulated) {
+          const village = extractVillageFromSection(row.section_title_ta);
+          if (village) await updateStmt.run(village, row.section_title_ta);
+        }
+        await db.prepare("UPDATE voters_master SET section_village_ta = 'சேர்த்தல் பட்டியல்' WHERE (is_supplement = 1 OR section_title_ta LIKE 'சேர்த்தல் பட்டியல்%') AND (section_village_ta IS NULL OR section_village_ta = '')").run();
+        await db.prepare('COMMIT').run();
+        console.log(`[db] Populated section_village_ta for ${unpopulated.length} distinct section titles (SQLite)`);
+      }
+    } else {
+      const [colCheck] = await poolQuery(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('voters_master', 'vms_voters_master') AND COLUMN_NAME = 'section_village_ta' LIMIT 1"
+      );
+      if (!colCheck || colCheck.length === 0) {
+        await poolQuery('ALTER TABLE voters_master ADD COLUMN section_village_ta VARCHAR(255) NULL AFTER section_title_ta');
+        console.log('[db] Added column section_village_ta to voters_master (MySQL)');
+      }
+      try {
+        await poolQuery('ALTER TABLE voters_master ADD INDEX idx_voters_section_village (section_village_ta)');
+      } catch {}
+
+      const [unpopulated] = await poolQuery(
+        "SELECT DISTINCT section_title_ta FROM voters_master WHERE section_title_ta IS NOT NULL AND (section_village_ta IS NULL OR section_village_ta = '')"
+      );
+      if (unpopulated && unpopulated.length > 0) {
+        for (const row of unpopulated) {
+          const village = extractVillageFromSection(row.section_title_ta);
+          if (village) {
+            await poolQuery('UPDATE voters_master SET section_village_ta = ? WHERE section_title_ta = ?', [village, row.section_title_ta]);
+          }
+        }
+        await poolQuery("UPDATE voters_master SET section_village_ta = 'சேர்த்தல் பட்டியல்' WHERE (is_supplement = 1 OR section_title_ta LIKE 'சேர்த்தல் பட்டியல்%') AND (section_village_ta IS NULL OR section_village_ta = '')");
+        console.log(`[db] Populated section_village_ta for ${unpopulated.length} distinct section titles (MySQL)`);
+      }
+    }
+  } catch (e) {
+    console.warn('[db] section_village_ta migration warning:', e.message);
   }
 }
 

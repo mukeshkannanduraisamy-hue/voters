@@ -40,6 +40,36 @@ router.get('/local-bodies', async (req, res, next) => {
   }
 });
 
+/** GET /api/booths/villages — distinct villages with voter count, scope-checked */
+router.get('/villages', async (req, res, next) => {
+  try {
+    const scope = await buildPartFilter(req.user, 'v');
+    const where = ['v.is_deleted = 0', 'v.section_village_ta IS NOT NULL', "v.section_village_ta != ''", scope.sql];
+    const params = [...scope.params];
+
+    const localBody = String(req.query.local_body ?? '').trim();
+    if (localBody) { where.push('pp.local_body_name_ta = ?'); params.push(localBody); }
+
+    const partNo = Number(req.query.part_no);
+    if (Number.isInteger(partNo) && partNo > 0) { where.push('v.part_no = ?'); params.push(partNo); }
+
+    const rows = await db
+      .prepare(
+        `SELECT v.section_village_ta AS village,
+                COUNT(v.epic_id) AS voter_count
+           FROM voters_master v
+           JOIN polling_parts pp ON pp.part_no = v.part_no
+          WHERE ${where.join(' AND ')}
+          GROUP BY v.section_village_ta
+          ORDER BY voter_count DESC, v.section_village_ta ASC`
+      )
+      .all(...params);
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** GET /api/booths/:partNo — one booth's detail, scope-checked */
 router.get('/:partNo', async (req, res, next) => {
   try {

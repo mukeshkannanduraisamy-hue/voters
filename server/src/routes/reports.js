@@ -4,6 +4,7 @@ import { db } from '../lib/db.js';
 import { authenticate, requireRole, audit, ROLES } from '../lib/auth.js';
 import { buildFilter } from './voters.js';
 import { getPublishedSchema, STRUCTURAL_TYPES } from '../lib/formSchema.js';
+import { extractVillageFromSection } from '../lib/villageExtractor.js';
 
 const router = express.Router();
 router.use(authenticate);
@@ -57,6 +58,7 @@ router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
     const stmt = db.prepare(
       `SELECT v.epic_id, v.name_ta, v.relative_name_ta, v.relation_type_ta,
               v.part_no, v.door_no, v.age, v.gender, v.voter_sno,
+              v.section_title_ta, v.section_village_ta,
               pp.local_body_name_ta, pp.local_body_type,
               s.corrected_name_ta, s.corrected_relative_name_ta,
               s.phone_number, s.job_type, s.other_job_text, s.surveyed_at,
@@ -92,6 +94,8 @@ router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
       { header: 'உறவு முறை', key: 'relation', width: 14 },
       { header: 'பாகம் எண்', key: 'part', width: 10 },
       { header: 'உள்ளாட்சி அமைப்பு', key: 'localBody', width: 20 },
+      { header: 'பிரிவு (Section)', key: 'sectionTitle', width: 30 },
+      { header: 'கிராமம் / பகுதி (Village)', key: 'sectionVillage', width: 22 },
       { header: 'கதவு எண்', key: 'door', width: 12 },
       { header: 'வயது', key: 'age', width: 8 },
       { header: 'பாலினம்', key: 'gender', width: 12 },
@@ -141,6 +145,8 @@ router.get('/export', requireRole(ROLES.A1), async (req, res, next) => {
         relation: r.relation_type_ta ?? '',
         part: r.part_no,
         localBody: r.local_body_name_ta,
+        sectionTitle: r.section_title_ta ?? '',
+        sectionVillage: r.section_village_ta || extractVillageFromSection(r.section_title_ta) || '',
         door: r.door_no ?? '',
         age: r.age ?? '',
         gender: r.gender ?? '',

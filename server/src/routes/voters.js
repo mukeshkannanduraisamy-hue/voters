@@ -4,6 +4,7 @@ import { authenticate, requireRole, audit, ROLES } from '../lib/auth.js';
 import { buildPartFilter } from '../lib/scope.js';
 import { invalidateDashboardCache } from './dashboard.js';
 import { getPublishedSchema, validateSubmission } from '../lib/formSchema.js';
+import { extractVillageFromSection } from '../lib/villageExtractor.js';
 
 const router = express.Router();
 router.use(authenticate);
@@ -12,7 +13,7 @@ const PHONE_RE = /^[6-9]\d{9}$/;
 
 const VOTER_COLUMNS = `
   v.epic_id, v.voter_sno, v.name_ta, v.relation_type_ta, v.relative_name_ta,
-  v.door_no, v.age, v.gender, v.section_title_ta, v.roll_type_ta,
+  v.door_no, v.age, v.gender, v.section_title_ta, v.section_village_ta, v.roll_type_ta,
   v.is_supplement, v.is_deleted, v.part_no,
   pp.local_body_name_ta, pp.local_body_type, pp.main_village_ta,
   pp.ac_no, pp.ac_name_ta, pp.taluk_ta, pp.district_ta, pp.pincode,
@@ -90,6 +91,7 @@ async function shapeVoter(r, { includeCustomFields = false, schemaFields = null 
     age: r.age,
     gender: r.gender,
     sectionTitleTa: r.section_title_ta,
+    sectionVillageTa: r.section_village_ta || extractVillageFromSection(r.section_title_ta),
     rollTypeTa: r.roll_type_ta,
     isSupplement: !!r.is_supplement,
     isDeleted: !!r.is_deleted,
@@ -167,9 +169,10 @@ async function buildFilter(req) {
         OR v.relative_name_ta LIKE ?
         OR v.door_no LIKE ?
         OR s.phone_number LIKE ?
+        OR v.section_village_ta LIKE ?
         OR v.voter_sno = ?
       )`);
-      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, Number(search));
+      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, Number(search));
     } else {
       where.push(`(
         UPPER(v.epic_id) LIKE ?
@@ -178,10 +181,14 @@ async function buildFilter(req) {
         OR v.relative_name_ta LIKE ?
         OR v.door_no LIKE ?
         OR s.phone_number LIKE ?
+        OR v.section_village_ta LIKE ?
       )`);
-      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      params.push(`%${search.toUpperCase()}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
   }
+
+  const village = String(req.query.village ?? '').trim();
+  if (village) { where.push('v.section_village_ta = ?'); params.push(village); }
 
   const localBody = String(req.query.local_body ?? '').trim();
   if (localBody) { where.push('pp.local_body_name_ta = ?'); params.push(localBody); }
