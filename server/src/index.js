@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { db, migrate } from './lib/db.js';
+import { db, migrate, isSqliteMode } from './lib/db.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import masterRoutes from './routes/masters.js';
@@ -95,8 +95,8 @@ app.get('/api/health', async (req, res, next) => {
     res.json({
       status: 'ok',
       service: 'vms-api',
-      version: '2.0.0 (MySQL)',
-      database: 'MySQL',
+      version: isSqliteMode ? '2.0.0 (SQLite)' : '2.0.0 (MySQL)',
+      database: isSqliteMode ? 'SQLite' : 'MySQL',
       constituency: ac ? { acNo: ac.ac_no, acNameTa: ac.ac_name_ta, districtTa: ac.district_ta } : null,
       counts: {
         voters: Number(votersRow?.c || 0),
@@ -152,12 +152,12 @@ app.listen(PORT, '0.0.0.0', async () => {
   try {
     const c = (await db.prepare('SELECT COUNT(*) c FROM voters_master WHERE is_deleted = 0').get())?.c ?? 0;
     const ac = await db.prepare('SELECT ac_no, ac_name_ta FROM polling_parts LIMIT 1').get();
-    console.log(`\n  VMS API (Direct MySQL)  ->  http://localhost:${PORT}`);
+    console.log(`\n  VMS API (${isSqliteMode ? 'Local SQLite' : 'Direct MySQL'})  ->  http://localhost:${PORT}`);
     console.log(`  constituency: AC ${ac?.ac_no ?? '?'} ${ac?.ac_name_ta ?? ''}`);
     console.log(`  live electors: ${Number(c).toLocaleString()}`);
     console.log(`  serving web:   ${fs.existsSync(webDist) ? 'yes (web/dist)' : 'no (run vite dev)'}\n`);
   } catch (e) {
-    console.log(`\n  VMS API (Direct MySQL)  ->  http://localhost:${PORT} (ready)`);
+    console.log(`\n  VMS API (${isSqliteMode ? 'Local SQLite' : 'Direct MySQL'})  ->  http://localhost:${PORT} (ready)`);
   }
   startBackupScheduler();
 });
