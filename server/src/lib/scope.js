@@ -37,9 +37,9 @@ export async function scopeContains(user, partNos) {
 
 /** Booth detail with local-body names, for display on profile and user cards. */
 export async function scopeDetail(userId) {
-  return await db
+  const booths = await db
     .prepare(
-      `SELECT pp.part_no, pp.local_body_name_ta, pp.local_body_type, pp.ac_no, pp.ac_name_ta,
+      `SELECT pp.part_no, pp.local_body_name_ta, pp.local_body_type, pp.main_village_ta, pp.ac_no, pp.ac_name_ta,
               (SELECT COUNT(*) FROM voters_master v WHERE v.part_no = pp.part_no AND v.is_deleted = 0) AS voter_count
          FROM user_jurisdictions uj
          JOIN polling_parts pp ON pp.part_no = uj.part_no
@@ -47,6 +47,40 @@ export async function scopeDetail(userId) {
         ORDER BY pp.part_no`
     )
     .all(userId);
+
+  if (booths.length === 0) return [];
+
+  const partNos = booths.map((b) => b.part_no);
+  const villageRows = await db
+    .prepare(
+      `SELECT v.part_no, v.section_village_ta
+         FROM voters_master v
+        WHERE v.is_deleted = 0
+          AND v.section_village_ta IS NOT NULL
+          AND v.section_village_ta != ''
+          AND v.section_village_ta != 'சேர்த்தல் பட்டியல்'
+          AND v.part_no IN (${partNos.map(() => '?').join(',')})
+        GROUP BY v.part_no, v.section_village_ta`
+    )
+    .all(...partNos);
+
+  const boothVillages = new Map();
+  for (const vr of villageRows) {
+    if (!boothVillages.has(vr.part_no)) boothVillages.set(vr.part_no, []);
+    boothVillages.get(vr.part_no).push(vr.section_village_ta);
+  }
+
+  return booths.map((b) => {
+    const list = boothVillages.get(b.part_no);
+    const villages = (list && list.length > 0)
+      ? list
+      : (b.main_village_ta ? [b.main_village_ta] : []);
+    return {
+      ...b,
+      villages,
+      village_display: villages.join(', '),
+    };
+  });
 }
 
 /**
@@ -73,12 +107,12 @@ export async function visibleUserIds(user) {
 }
 
 /**
- * The booths a caller may assign or filter by, grouped by local body.
+ * The booths a caller may assign or filter by, grouped by local body and village.
  */
 export async function assignableParts(user) {
   const parts = await scopePartNos(user);
   const scoped = parts !== null;
-  if (scoped && parts.length === 0) return { localBodies: [], parts: [] };
+  if (scoped && parts.length === 0) return { localBodies: [], villages: [], parts: [] };
 
   const where = scoped ? `WHERE pp.part_no IN (${parts.map(() => '?').join(',')})` : '';
   const params = scoped ? parts : [];
@@ -93,6 +127,52 @@ export async function assignableParts(user) {
         ORDER BY pp.part_no`
     )
     .all(...params);
+
+  // Group section_village_ta by part_no for each booth
+  const vWhere = scoped ? `AND v.part_no IN (${parts.map(() => '?').join(',')})` : '';
+  const villageRows = await db
+    .prepare(
+      `SELECT v.part_no, v.section_village_ta, COUNT(v.epic_id) AS voter_count
+         FROM voters_master v
+        WHERE v.is_deleted = 0
+          AND v.section_village_ta IS NOT NULL
+          AND v.section_village_ta != ''
+          AND v.section_village_ta != 'சேர்த்தல் பட்டியல்'
+          ${vWhere}
+        GROUP BY v.part_no, v.section_village_ta`
+    )
+    .all(...params);
+
+  const boothVillages = new Map();
+  const villageMap = new Map();
+
+  for (const vr of villageRows) {
+    if (!boothVillages.has(vr.part_no)) boothVillages.set(vr.part_no, []);
+    boothVillages.get(vr.part_no).push(vr.section_village_ta);
+
+    if (!villageMap.has(vr.section_village_ta)) {
+      villageMap.set(vr.section_village_ta, {
+        name: vr.section_village_ta,
+        parts: new Set(),
+        voter_count: 0,
+      });
+    }
+    const vm = villageMap.get(vr.section_village_ta);
+    vm.parts.add(vr.part_no);
+    vm.voter_count += vr.voter_count;
+  }
+
+  const partsWithVillages = rows.map((r) => {
+    const list = boothVillages.get(r.part_no);
+    const villages = (list && list.length > 0)
+      ? list
+      : (r.main_village_ta ? [r.main_village_ta] : []);
+    return {
+      ...r,
+      villages,
+      village_display: villages.join(', '),
+    };
+  });
 
   const localBodies = new Map();
   for (const r of rows) {
@@ -109,5 +189,17 @@ export async function assignableParts(user) {
     lb.voter_count += r.voter_count;
   }
 
-  return { localBodies: [...localBodies.values()], parts: rows };
+  const villagesSummary = [...villageMap.values()]
+    .map((v) => ({
+      name: v.name,
+      part_count: v.parts.size,
+      voter_count: v.voter_count,
+    }))
+    .sort((a, b) => b.voter_count - a.voter_count);
+
+  return {
+    localBodies: [...localBodies.values()],
+    villages: villagesSummary,
+    parts: partsWithVillages,
+  };
 }

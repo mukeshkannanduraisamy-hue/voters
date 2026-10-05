@@ -165,6 +165,12 @@ export default function Users() {
                           {u.localBodySummary.join(', ') || '—'}
                           {u.localBodyOverflow > 0 && <span> +{u.localBodyOverflow}</span>}
                         </div>
+                        {u.villageSummary && u.villageSummary.length > 0 && (
+                          <div className="t-xs t-muted ta t-truncate" style={{ maxWidth: 190, fontSize: '0.72rem', opacity: 0.9, marginTop: 1 }}>
+                            📍 {u.villageSummary.join(', ')}
+                            {u.villageOverflow ? ` +${u.villageOverflow}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="num tabnum t-semi">{fmt(u.surveysDone)}</td>
                       <td>{u.isActive ? <Badge tone="ok" dot>Active</Badge> : <Badge tone="bad" dot>Disabled</Badge>}</td>

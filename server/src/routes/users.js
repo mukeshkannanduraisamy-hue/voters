@@ -31,6 +31,7 @@ function isOnline(lastSeenAt) {
 async function shapeUser(row) {
   const jurisdictions = await scopeDetail(row.id);
   const localBodies = [...new Set(jurisdictions.map((j) => j.local_body_name_ta))];
+  const allVillages = [...new Set(jurisdictions.flatMap((j) => j.villages || (j.main_village_ta ? [j.main_village_ta] : [])))];
   return {
     id: row.id,
     mobileNumber: row.mobile_number,
@@ -52,6 +53,8 @@ async function shapeUser(row) {
     votersInScope: jurisdictions.reduce((a, j) => a + Number(j.voter_count || 0), 0),
     localBodySummary: localBodies.slice(0, 3),
     localBodyOverflow: Math.max(0, localBodies.length - 3),
+    villageSummary: allVillages.slice(0, 3),
+    villageOverflow: Math.max(0, allVillages.length - 3),
     jurisdictions,
   };
 }

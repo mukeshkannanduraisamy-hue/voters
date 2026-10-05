@@ -21,13 +21,13 @@ export default function Profile() {
   // Group the flat booth list by local body for display.
   const grouped = useMemo(() => {
     if (!user) return [];
-    const map = new Map<string, { name: string; type: 'TOWN_PANCHAYAT' | 'VILLAGE_PANCHAYAT'; parts: number[]; voters: number }>();
+    const map = new Map<string, { name: string; type: 'TOWN_PANCHAYAT' | 'VILLAGE_PANCHAYAT'; parts: typeof user.jurisdictions; voters: number }>();
     for (const j of user.jurisdictions) {
       if (!map.has(j.local_body_name_ta)) {
         map.set(j.local_body_name_ta, { name: j.local_body_name_ta, type: j.local_body_type, parts: [], voters: 0 });
       }
       const g = map.get(j.local_body_name_ta)!;
-      g.parts.push(j.part_no);
+      g.parts.push(j);
       g.voters += j.voter_count;
     }
     return [...map.values()].sort((a, b) => b.voters - a.voters);
@@ -136,7 +136,14 @@ export default function Profile() {
                       </div>
                       <div className="chips mt-3">
                         {g.parts.map((p) => (
-                          <span key={p} className="chip" style={{ paddingRight: 11 }}>Booth {p}</span>
+                          <span key={p.part_no} className="chip" style={{ paddingRight: 11 }} title={p.village_display || p.main_village_ta || undefined}>
+                            Booth {p.part_no}
+                            {(p.village_display || p.main_village_ta) && (
+                              <span className="ta t-subtle t-xs" style={{ marginLeft: 4 }}>
+                                ({p.village_display || p.main_village_ta})
+                              </span>
+                            )}
+                          </span>
                         ))}
                       </div>
                     </div>

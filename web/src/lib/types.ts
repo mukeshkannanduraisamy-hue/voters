@@ -8,6 +8,9 @@ export interface JurisdictionBooth {
   part_no: number;
   local_body_name_ta: string;
   local_body_type: LocalBodyType;
+  main_village_ta?: string | null;
+  villages?: string[];
+  village_display?: string;
   ac_no: string;
   ac_name_ta: string;
   voter_count: number;
@@ -52,6 +55,8 @@ export interface ManagedUser {
   votersInScope: number;
   localBodySummary: string[];
   localBodyOverflow: number;
+  villageSummary?: string[];
+  villageOverflow?: number;
   jurisdictions: JurisdictionBooth[];
 }
 
@@ -198,11 +203,20 @@ export interface Booth {
   ac_no: string;
   ac_name_ta: string;
   voter_count: number;
+  villages?: string[];
+  village_display?: string;
 }
 export interface LocalBodySummary {
   name: string; type: LocalBodyType; part_count: number; voter_count: number;
 }
-export interface BoothTree { localBodies: LocalBodySummary[]; parts: Booth[] }
+export interface VillageSummary {
+  name: string; part_count: number; voter_count: number;
+}
+export interface BoothTree {
+  localBodies: LocalBodySummary[];
+  villages?: VillageSummary[];
+  parts: Booth[];
+}
 
 /* ----------------------------- dashboards ------------------------------- */
 export interface LocalBodyProgress {

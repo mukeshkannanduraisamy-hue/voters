@@ -109,6 +109,20 @@ export default function CreateUser() {
     .filter((p) => partNos.includes(p.part_no))
     .reduce((a, p) => a + p.voter_count, 0);
 
+  const selectedVillagesCount = useMemo(() => {
+    if (!tree) return 0;
+    const set = new Set<string>();
+    const sel = new Set(partNos);
+    for (const p of tree.parts) {
+      if (!sel.has(p.part_no)) continue;
+      const vList = p.villages && p.villages.length > 0
+        ? p.villages
+        : (p.main_village_ta ? [p.main_village_ta] : []);
+      for (const v of vList) set.add(v);
+    }
+    return set.size;
+  }, [tree, partNos]);
+
   return (
     <form onSubmit={submit}>
       <PageHead
@@ -209,7 +223,7 @@ export default function CreateUser() {
               title="3 · Assign polling booths"
               sub="These booths define everything the user can see and survey"
               icon="map-pin"
-              actions={<Badge tone={partNos.length ? 'brand' : 'muted'}>{partNos.length} selected</Badge>}
+              actions={<Badge tone={partNos.length ? 'brand' : 'muted'}>{partNos.length} booth{partNos.length === 1 ? '' : 's'}{selectedVillagesCount > 0 ? ` · ${selectedVillagesCount} villages` : ''}</Badge>}
             />
             <div className="card-body">
               {errors.partNos && <div className="mb-3"><Alert tone="bad">{errors.partNos}</Alert></div>}
@@ -233,6 +247,7 @@ export default function CreateUser() {
                 tone={verified?.verified && !verified.alreadyRegistered ? 'ok' : undefined}
               />
               <Row label="Booths" value={fmt(partNos.length)} tone={partNos.length ? 'ok' : undefined} />
+              <Row label="Villages" value={fmt(selectedVillagesCount)} tone={selectedVillagesCount ? 'ok' : undefined} />
               <Row label="Electors in scope" value={fmt(selectedVoters)} />
             </div>
           </Card>
