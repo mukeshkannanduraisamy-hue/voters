@@ -195,6 +195,10 @@ export interface FormFieldDef {
 }
 
 /* ------------------------------- booths --------------------------------- */
+export interface VillageItem {
+  name: string;
+  voter_count: number;
+}
 export interface Booth {
   part_no: number;
   local_body_name_ta: string;
@@ -204,6 +208,7 @@ export interface Booth {
   ac_name_ta: string;
   voter_count: number;
   villages?: string[];
+  village_items?: VillageItem[];
   village_display?: string;
 }
 export interface LocalBodySummary {

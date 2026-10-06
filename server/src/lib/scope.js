@@ -144,11 +144,18 @@ export async function assignableParts(user) {
     .all(...params);
 
   const boothVillages = new Map();
+  const boothVillageItems = new Map();
   const villageMap = new Map();
 
   for (const vr of villageRows) {
     if (!boothVillages.has(vr.part_no)) boothVillages.set(vr.part_no, []);
     boothVillages.get(vr.part_no).push(vr.section_village_ta);
+
+    if (!boothVillageItems.has(vr.part_no)) boothVillageItems.set(vr.part_no, []);
+    boothVillageItems.get(vr.part_no).push({
+      name: vr.section_village_ta,
+      voter_count: Number(vr.voter_count || 0),
+    });
 
     if (!villageMap.has(vr.section_village_ta)) {
       villageMap.set(vr.section_village_ta, {
@@ -164,12 +171,17 @@ export async function assignableParts(user) {
 
   const partsWithVillages = rows.map((r) => {
     const list = boothVillages.get(r.part_no);
+    const items = boothVillageItems.get(r.part_no);
     const villages = (list && list.length > 0)
       ? list
       : (r.main_village_ta ? [r.main_village_ta] : []);
+    const village_items = (items && items.length > 0)
+      ? items
+      : (r.main_village_ta ? [{ name: r.main_village_ta, voter_count: Number(r.voter_count || 0) }] : []);
     return {
       ...r,
       villages,
+      village_items,
       village_display: villages.join(', '),
     };
   });

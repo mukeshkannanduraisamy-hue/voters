@@ -626,6 +626,45 @@
 /* 18px keeps the box comfortable on a phone; the whole row is the tap target. */
 .picker-opt input { accent-color: var(--brand-600); width: 18px; height: 18px; flex: 0 0 18px; }
 .picker-opt .meta { margin-left: auto; font-size: var(--fs-xs); color: var(--text-subtle); }
+
+.picker-booth-group {
+  border-bottom: 1px solid var(--border);
+}
+.picker-booth-group:last-child {
+  border-bottom: none;
+}
+.picker-booth-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 8px var(--sp-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--dur) var(--ease);
+  cursor: pointer;
+}
+.picker-booth-row:hover { background: var(--surface-3); }
+.picker-booth-row.on { background: var(--brand-50); font-weight: 600; }
+[data-theme='dark'] .picker-booth-row.on { background: rgba(37, 99, 235, 0.16); }
+.picker-booth-row input { accent-color: var(--brand-600); width: 18px; height: 18px; flex: 0 0 18px; }
+.picker-booth-row .meta { margin-left: auto; font-size: var(--fs-xs); color: var(--text-subtle); }
+
+.picker-villages-container {
+  padding: 4px 0 6px 24px;
+  background: var(--surface);
+  border-left: 3px solid var(--brand-400);
+}
+.picker-village-opt {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 5px var(--sp-3);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background var(--dur) var(--ease);
+}
+.picker-village-opt:hover { background: var(--surface-3); }
+.picker-village-opt.on { background: rgba(37, 99, 235, 0.08); font-weight: 500; }
+[data-theme='dark'] .picker-village-opt.on { background: rgba(37, 99, 235, 0.18); }
+.picker-village-opt input { accent-color: var(--brand-600); width: 16px; height: 16px; flex: 0 0 16px; }
+.picker-village-opt .meta { margin-left: auto; font-size: var(--fs-xs); color: var(--text-subtle); }
 .picker-foot {
   padding: var(--sp-2) var(--sp-3);
   border-top: 1px solid var(--border);

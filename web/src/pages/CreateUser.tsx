@@ -220,8 +220,8 @@ export default function CreateUser() {
           {/* ---- 3. booth assignment ---- */}
           <Card>
             <CardHead
-              title="3 · Assign polling booths"
-              sub="These booths define everything the user can see and survey"
+              title="3 · Assign polling booths & villages"
+              sub="Local bodies → Booths → select villages for this user"
               icon="map-pin"
               actions={<Badge tone={partNos.length ? 'brand' : 'muted'}>{partNos.length} booth{partNos.length === 1 ? '' : 's'}{selectedVillagesCount > 0 ? ` · ${selectedVillagesCount} villages` : ''}</Badge>}
             />
