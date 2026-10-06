@@ -137,9 +137,9 @@ export async function assignableParts(user) {
         WHERE v.is_deleted = 0
           AND v.section_village_ta IS NOT NULL
           AND v.section_village_ta != ''
-          AND v.section_village_ta != 'சேர்த்தல் பட்டியல்'
           ${vWhere}
-        GROUP BY v.part_no, v.section_village_ta`
+        GROUP BY v.part_no, v.section_village_ta
+        ORDER BY v.part_no, (CASE WHEN v.section_village_ta = 'சேர்த்தல் பட்டியல்' THEN 1 ELSE 0 END), v.section_village_ta`
     )
     .all(...params);
 
@@ -155,18 +155,21 @@ export async function assignableParts(user) {
     boothVillageItems.get(vr.part_no).push({
       name: vr.section_village_ta,
       voter_count: Number(vr.voter_count || 0),
+      is_supplement: vr.section_village_ta === 'சேர்த்தல் பட்டியல்',
     });
 
-    if (!villageMap.has(vr.section_village_ta)) {
-      villageMap.set(vr.section_village_ta, {
-        name: vr.section_village_ta,
-        parts: new Set(),
-        voter_count: 0,
-      });
+    if (vr.section_village_ta !== 'சேர்த்தல் பட்டியல்') {
+      if (!villageMap.has(vr.section_village_ta)) {
+        villageMap.set(vr.section_village_ta, {
+          name: vr.section_village_ta,
+          parts: new Set(),
+          voter_count: 0,
+        });
+      }
+      const vm = villageMap.get(vr.section_village_ta);
+      vm.parts.add(vr.part_no);
+      vm.voter_count += vr.voter_count;
     }
-    const vm = villageMap.get(vr.section_village_ta);
-    vm.parts.add(vr.part_no);
-    vm.voter_count += vr.voter_count;
   }
 
   const partsWithVillages = rows.map((r) => {

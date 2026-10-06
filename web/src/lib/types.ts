@@ -198,6 +198,7 @@ export interface FormFieldDef {
 export interface VillageItem {
   name: string;
   voter_count: number;
+  is_supplement?: boolean;
 }
 export interface Booth {
   part_no: number;

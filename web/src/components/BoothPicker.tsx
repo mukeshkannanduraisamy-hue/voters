@@ -406,10 +406,10 @@ export function BoothPicker({
             </div>
           ) : (
             visibleBooths.map((b) => {
-              const vItems: { name: string; voter_count: number }[] = b.village_items?.length
+              const vItems: { name: string; voter_count: number; is_supplement?: boolean }[] = b.village_items?.length
                 ? b.village_items
                 : (b.villages?.length
-                  ? b.villages.map((v) => ({ name: v, voter_count: 0 }))
+                  ? b.villages.map((v) => ({ name: v, voter_count: 0, is_supplement: v === 'சேர்த்தல் பட்டியல்' }))
                   : (b.main_village_ta ? [{ name: b.main_village_ta, voter_count: b.voter_count }] : []));
 
               const allVKeys = vItems.map((v) => `${b.part_no}:${v.name}`);
@@ -448,7 +448,8 @@ export function BoothPicker({
                       title={isExpanded ? 'Collapse villages' : 'Expand villages'}
                     >
                       <span className="ta" style={{ marginRight: 4 }}>
-                        {vItems.length} கிராமம்
+                        {vItems.filter((v) => !v.is_supplement && v.name !== 'சேர்த்தல் பட்டியல்').length} கிராமம்
+                        {vItems.some((v) => v.is_supplement || v.name === 'சேர்த்தல் பட்டியல்') ? ' + SSR' : ''}
                       </span>
                       <span
                         style={{
@@ -467,16 +468,29 @@ export function BoothPicker({
                     <div className="picker-villages-container">
                       {vItems.map((v) => {
                         const isVChecked = villageKeySet.has(`${b.part_no}:${v.name}`);
+                        const isSupp = v.is_supplement || v.name === 'சேர்த்தல் பட்டியல்';
                         return (
-                          <label key={v.name} className={`picker-village-opt ${isVChecked ? 'on' : ''}`}>
+                          <label key={v.name} className={`picker-village-opt ${isVChecked ? 'on' : ''} ${isSupp ? 'supplement' : ''}`}>
                             <input
                               type="checkbox"
                               checked={isVChecked}
                               onChange={() => toggleVillage(b.part_no, v.name)}
                             />
-                            <span className="ta t-truncate" style={{ flex: 1 }}>
-                              📍 {v.name}
+                            <span
+                              className="ta t-truncate"
+                              style={{
+                                flex: 1,
+                                color: isSupp ? 'var(--amber-700, #b45309)' : undefined,
+                                fontWeight: isSupp ? 500 : undefined,
+                              }}
+                            >
+                              {isSupp ? '📋 சேர்த்தல் பட்டியல் (புதிய வாக்காளர்கள்)' : `📍 ${v.name}`}
                             </span>
+                            {isSupp && (
+                              <span className="badge badge-warn" style={{ fontSize: '0.65rem', padding: '1px 6px', marginRight: 4 }}>
+                                SSR சேர்க்கை
+                              </span>
+                            )}
                             {v.voter_count > 0 && (
                               <span className="meta tabnum">{fmt(v.voter_count)} electors</span>
                             )}
